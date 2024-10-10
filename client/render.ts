@@ -8,8 +8,7 @@ export const renderBasics = (parent: Element) => {
         <div id="subtitle-languages" class="action-bubble"></div>
         <div class="action-bubble">
           <select id="subtitle-add-language-list"></select>
-          <button id="subtitle-add" class="btn btn-primary">+ new</button>
-          <button id="subtitle-add-copy" class="btn btn-primary">+ copy to new</button>
+          <button id="subtitle-add-translate" class="btn btn-primary">+ translate</button>
         </div>
         <div class="action-bubble">
           <button id="subtitle-delete" class="btn btn-danger">Delete</button>
@@ -70,6 +69,14 @@ export const renderBasics = (parent: Element) => {
         </div>
       </div>
     </div>
+    <div id="transcription-popup" class="popup">
+      <div class="popup-content">
+        <h2>No Available Transcription</h2>
+        <p>There is currently no transcription available for this video.</p>
+        <button class="btn btn-primary" id="generate-transcription">Generate Transcription </button>
+      </div>
+    </div>
+
   `;
 };
 
@@ -82,16 +89,31 @@ export const renderLanguageSelector = (
   element.innerHTML = "";
 
   languages.forEach((lang) => {
-    const btn = document.createElement("button");
-    btn.classList.add("btn");
-    btn.classList.add((lang.id == currentLangId) ? "btn-dark" : "btn-light");
-    btn.innerText = lang.label;
-    if (lang.changed) {
-      btn.innerText += " (unsaved)";
+    if(lang.id!="11"){
+      const btn = document.createElement("button");
+      btn.classList.add("btn");
+      btn.classList.add((lang.id == currentLangId) ? "btn-dark" : "btn-light");
+      btn.innerText = lang.label;
+      if (lang.changed) {
+        btn.innerText += " (unsaved)";
+      }
+      btn.onclick = () => onSelected(lang.id);
+      element.appendChild(btn);
+      element.appendChild(document.createTextNode(" "));
+    }else{
+      // pending subtitle, not available for selection
+      const btn = document.createElement("button");
+      const loader = document.createElement("span");
+      loader.classList.add("loader");
+      btn.classList.add("btn");
+      btn.classList.add("btn-light");
+
+      btn.innerText = lang.label;
+      btn.disabled = true;
+      btn.appendChild(loader);
+      element.appendChild(btn);
+      element.appendChild(document.createTextNode(" "));
     }
-    btn.onclick = () => onSelected(lang.id);
-    element.appendChild(btn);
-    element.appendChild(document.createTextNode(" "));
   });
 };
 

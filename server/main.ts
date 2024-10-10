@@ -68,7 +68,37 @@ async function register ({ peertubeHelpers, getRouter, storageManager }: Registe
     await storageManager.storeData("subtitle-lock-" + videoId, lock);
 
     res.json(lock);
-  })
+  });
+
+  router.post('/translate', async (req, res) => {
+    const videoId = req.query.id as string;
+    if (!videoId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+      peertubeHelpers.logger.error("Possibly invalid videoid");
+      res.json({
+        locked: true,
+        changed: "",
+      });
+      return
+    }
+    const user = await peertubeHelpers.user.getAuthUser(res);
+    const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
+
+    if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
+      peertubeHelpers.logger.info("User cannot access video lock");
+      res.status(403);
+      res.json({});
+      return;
+    }
+
+    peertubeHelpers.logger.info("Translate request" + req.query.id as string);
+    peertubeHelpers.logger.info("Translate request" + JSON.stringify(req.body) as string);
+
+
+    res.status(200);
+    res.json({"status": "ok"});
+
+    // 
+  });
 
   async function userIdCanAccessVideo(userId?: number, videoId?: number): Promise<boolean> {
     if (typeof userId != "number" || typeof videoId != "number") {

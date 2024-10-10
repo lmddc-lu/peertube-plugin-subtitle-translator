@@ -7,6 +7,12 @@ import { VideoCaption, VideoDetails, VideoFile } from '@peertube/peertube-types/
 import { Cue, TextSTyle } from './types';
 
 const newCueLength = 3;
+let captionList: Array<{
+  id : string
+  label: string
+  changed: boolean
+  cues: Cue[]
+}> = [];
 
 async function register ({
   peertubeHelpers,
@@ -109,8 +115,7 @@ async function register ({
       const pausePlayElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-pause-play");
       const seekMinusElement = rootEl.querySelector<HTMLDivElement>("#subtitle-seek-minus-1");
       const addNewLanguageListElement = rootEl.querySelector<HTMLSelectElement>("#subtitle-add-language-list");
-      const addNewLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-add");
-      const addCopyLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-add-copy");
+      const addTranslateLanguageElement = rootEl.querySelector<HTMLButtonElement>('#subtitle-add-translate')
       const saveCurrentLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-save");
       const deleteCurrentLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-delete");
       const timelineElement = rootEl.querySelector<HTMLCanvasElement>("#subtitle-timeline");
@@ -140,8 +145,7 @@ async function register ({
         || !timestampElement
         || !languageListElement
         || !addNewLanguageListElement
-        || !addNewLanguageElement
-        || !addCopyLanguageElement
+        || !addTranslateLanguageElement
         || !saveCurrentLanguageElement
         || !deleteCurrentLanguageElement
         || !timelineElement
@@ -176,7 +180,7 @@ async function register ({
         if (parameters.id) {
           const originalHref = location.href;
 
-          const lock = await (await fetch("/plugins/subtitle-editor/router/lock?id=" + parameters.id, fetchCredentials)).json();
+          const lock = await (await fetch("/plugins/subtitle-translator/router/lock?id=" + parameters.id, fetchCredentials)).json();
           if (lock.locked && new Date().getTime() < new Date(lock.changed).getTime() + 60*1000) {
             alert("Someone might be editing! If this is not you, make sure to coordinate with the other person or risk loosing data");
           }
@@ -187,7 +191,7 @@ async function register ({
               return;
             }
             fetch(
-              "/plugins/subtitle-editor/router/lock?id=" + parameters.id,
+              "/plugins/subtitle-translator/router/lock?id=" + parameters.id,
               {
                 body: JSON.stringify({ locked: true }),
                 method: 'PUT',
@@ -223,12 +227,7 @@ async function register ({
           }
 
           const captions: { data: VideoCaption[] } = await captionsRequest.json();
-          let captionList: {
-            id: string,
-            label: string,
-            changed: boolean,
-            cues: Cue[],
-          }[] = await Promise.all(captions.data.map(async c => ({
+          captionList = await Promise.all(captions.data.map(async c => ({
             id: c.language.id,
             label: c.language.label,
             changed: false,
@@ -754,28 +753,91 @@ async function register ({
             selectLanguage,
           );
 
-          addNewLanguageElement.onclick = () => {
-            captionList.push({
-              changed: true,
-              id: addNewLanguageListElement.value,
-              label: languages[addNewLanguageListElement.value],
-              cues: [],
-            });
-            selectLanguage(addNewLanguageListElement.value);
-          };
+          addTranslateLanguageElement.onclick = async () => {
+            const videoId = parameters.id;
+            const originalLanguage = currentCaptionLanguageId;
+            const targetLanguage = addNewLanguageListElement.value;
 
-          addCopyLanguageElement.onclick = async () => {
-            const existing = captionList.find(e => e.id == currentCaptionLanguageId);
-            if (existing) {
-              captionList.push({
-                changed: true,
-                id: addNewLanguageListElement.value,
-                label: languages[addNewLanguageListElement.value],
-                cues: existing.cues.map(c => ({ ...c })),
-              });
-              selectLanguage(addNewLanguageListElement.value);
+            console.log("Translate", originalLanguage, targetLanguage);
+
+            if (originalLanguage == targetLanguage) {
+              alert("Can't translate to the same language");
+              return;
             }
-          };
+
+            if(videoId && originalLanguage && targetLanguage) {
+
+
+              console.log("Fetching captions");
+              let response = await fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials);
+
+              const captions : any = await response.json();
+
+              console.log("Got captions" + JSON.stringify(captions));
+
+
+              // Check if the video has the captions in the original language
+              let path = "";
+              let found = false;
+              captions.data.forEach(
+                (element: { language: { id: string }; captionPath: string }) => {
+                  console.log("Checking language: " + element.language.id);
+                  if (element.language.id === originalLanguage) {
+                    path = element.captionPath;
+                    found = true;
+                  }
+                }
+              );
+
+              if (!found) {
+                alert("No captions in the original language found");
+                return;
+              }
+
+              console.log("Fetching captions from " + path);
+
+              let vttCaptions = await fetch(path, fetchCredentials);
+
+              await vttCaptions.text().then(async (data) => {
+
+                let subtitleTranslationRequest = await fetch(`/plugins/subtitle-translator/router/translate?id=${videoId}`, {
+                  method: 'POST',
+                  body: JSON.stringify({
+                    originalLanguage: originalLanguage,
+                    targetLanguage: targetLanguage,
+                    captions: data,
+                  }),
+                  headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    ...fetchCredentials.headers,
+                  },
+                });
+
+                let translatedCaptions = await subtitleTranslationRequest.json();
+
+                console.log("Request done");
+                console.log("Translated captions: " + JSON.stringify(translatedCaptions));
+
+                captionList.unshift({
+                  id: '11',
+                  label: 'Translation pending.',
+                  changed: false,
+                  cues: []
+                });
+
+                renderLanguageSelector(
+                  languageListElement,
+                  captionList,
+                  currentCaptionLanguageId,
+                  selectLanguage
+                );
+              });
+
+
+            }
+
+          }
 
           deleteCurrentLanguageElement.onclick = () => {
             if (currentCaptionLanguageId) {
