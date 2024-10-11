@@ -13,6 +13,8 @@ let captionList: Array<{
   changed: boolean
   cues: Cue[]
 }> = [];
+let languages: { [id: string]: string };
+let languagePairs : string[][] = [];
 
 async function register ({
   peertubeHelpers,
@@ -215,10 +217,12 @@ async function register ({
             videoDataRequest,
             captionsRequest,
             languagesRequest,
+            languagesPairRequest
           ] = await Promise.all([
             fetch(`/api/v1/videos/${parameters.id}`, fetchCredentials),
             fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials),
             fetch("/api/v1/videos/languages", fetchCredentials),
+            fetch('/plugins/subtitle-translator/router/available-pairs', fetchCredentials)
           ]);
 
           if (captionsRequest.status !== 200 || videoDataRequest.status !== 200) {
@@ -227,6 +231,9 @@ async function register ({
           }
 
           const captions: { data: VideoCaption[] } = await captionsRequest.json();
+          languagePairs = await languagesPairRequest.json();
+          languages = await languagesRequest.json();
+          
           captionList = await Promise.all(captions.data.map(async c => ({
             id: c.language.id,
             label: c.language.label,
@@ -256,13 +263,7 @@ async function register ({
             return;
           });
 
-          const languages: { [id: string]: string } = await languagesRequest.json();
-          renderLanguageList(
-            addNewLanguageListElement,
-            Object.keys(languages)
-              .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
-              .sort((a, b) => a.label.localeCompare(b.label)),
-          );
+          
           
           const videoData: VideoDetails = await videoDataRequest.json();
 
@@ -370,12 +371,23 @@ async function register ({
                 currentCaptionLanguageId,
                 selectLanguage,
               );
+              
+              renderLanguageList(
+                addNewLanguageListElement,
+                Object.keys(languages)
+                  .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+                  .sort((a, b) => a.label.localeCompare(b.label)),
+                  currentCaptionLanguageId, 
+                  languagePairs
+              );
+
               renderCueTable(cuesElement, [], { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
 
               return;
             }
 
             currentCaptionLanguageId = languageId;
+
             const captionData = captionList.find(e => e.id == currentCaptionLanguageId);
             if (!captionData) {
               alert("Could not find captions that was expected to be here: " + currentCaptionLanguageId);
@@ -390,6 +402,22 @@ async function register ({
               currentCaptionLanguageId,
               selectLanguage,
             );
+
+            console.log("rendering language list");
+            console.log("captionList", captionList);
+            console.log("languages", languages);
+            console.log("currentCaptionLanguageId", currentCaptionLanguageId);
+            console.log("languagePairs", languagePairs);
+
+            renderLanguageList(
+              addNewLanguageListElement,
+              Object.keys(languages)
+                .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+                .sort((a, b) => a.label.localeCompare(b.label)),
+                currentCaptionLanguageId,
+                languagePairs
+            )
+        
 
             cueSelectCurrentCueElement.onclick = () => {
               const cue = captionData.cues.find(c => c.startTime < videoPosition && videoPosition < c.endTime);
@@ -746,12 +774,23 @@ async function register ({
             currentCaptionLanguageId = captions.data[0].language.id;
             selectLanguage(currentCaptionLanguageId);
           }
+          
           renderLanguageSelector(
             languageListElement,
             captionList,
             currentCaptionLanguageId,
             selectLanguage,
           );
+
+          renderLanguageList(
+            addNewLanguageListElement,
+            Object.keys(languages)
+              .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+              .sort((a, b) => a.label.localeCompare(b.label)),
+              currentCaptionLanguageId, 
+              languagePairs
+          );
+
 
           addTranslateLanguageElement.onclick = async () => {
             const videoId = parameters.id;
@@ -817,7 +856,7 @@ async function register ({
                 let translatedCaptions = await subtitleTranslationRequest.json();
 
                 console.log("Request done");
-                console.log("Translated captions: " + JSON.stringify(translatedCaptions));
+                console.log("Request Result : " + JSON.stringify(translatedCaptions));
 
                 captionList.unshift({
                   id: '11',

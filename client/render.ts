@@ -133,16 +133,51 @@ export const renderPreview = (element: HTMLDivElement, cues: Cue[]) => {
   });
 }
 
-export const renderLanguageList = (element: HTMLSelectElement, languages: { id: string, label: string, disabled: boolean }[]) => {
-  languages.forEach(lang => {
-    const opt = document.createElement("option");
-    opt.innerText = lang.label;
-    opt.value = lang.id;
-    if (lang.disabled) {
-      opt.setAttribute("disabled", "disabled");
+export const renderLanguageList = (element: HTMLSelectElement, languages: { id: string, label: string, disabled: boolean }[], currentCaptionLanguageId: string, languagesPair : string[][]) => {
+  console.log("renderLanguageList");
+  console.log("currentCaptionLanguageId: " + currentCaptionLanguageId);
+
+  
+  element.innerHTML = "";
+  let count = 0;
+  if(currentCaptionLanguageId) {
+    console.log("currentCaptionLanguageId: " + currentCaptionLanguageId);
+    languagesPair.forEach(pair => {
+      console.log("pair[0]: " + pair[0] + " pair[1]: " + pair[1]);
+        languages.forEach(lang => {
+          if(pair[0] == currentCaptionLanguageId && pair[1] == lang.id) {
+            const opt = document.createElement("option");
+            opt.innerText = lang.label;
+            opt.value = lang.id;
+            if (lang.disabled) {
+              opt.setAttribute("disabled", "disabled");
+            } else {
+              count += 1;
+            }
+            element.appendChild(opt);
+            console.log("currentCaptionLanguageId: " + currentCaptionLanguageId + " lang.id: " + lang.id);
+          }
+        });
+    });
+
+    if(count == 0){
+      console.log("ActionZone hide");
+
+      let actionzone = element.parentElement;
+      if(actionzone){
+        actionzone.style.display = 'none';
+      }
+    } else {
+      console.log("ActionZone display");
+
+      let actionzone = element.parentElement;
+      if(actionzone){
+        actionzone.style.display = 'block';
+      }
     }
-    element.appendChild(opt);
-  });
+
+  }
+
 }
 
 interface RenderTableOpts {

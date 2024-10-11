@@ -90,8 +90,15 @@ async function register ({ peertubeHelpers, getRouter, storageManager }: Registe
       return;
     }
 
-    peertubeHelpers.logger.info("Translate request" + req.query.id as string);
-    peertubeHelpers.logger.info("Translate request" + JSON.stringify(req.body) as string);
+
+    let originalLanguage = req.body.originalLanguage as string;
+    let targetLanguage = req.body.targetLanguage as string;
+    let captions = req.body.captions as string;
+
+    peertubeHelpers.logger.info("Translate request originalLanguage : " + originalLanguage);
+    peertubeHelpers.logger.info("Translate request targetLanguage: " + targetLanguage);
+    peertubeHelpers.logger.info("Translate request captions: " + captions);
+
 
 
     res.status(200);
@@ -99,6 +106,68 @@ async function register ({ peertubeHelpers, getRouter, storageManager }: Registe
 
     // 
   });
+
+  router.get("/available-pairs", async (req, res) => {
+    const user = await peertubeHelpers.user.getAuthUser(res);
+
+    if (!user) {
+      peertubeHelpers.logger.info("User cannot access video translation");
+      res.status(403).json({});
+      return;
+    }
+
+    fetch(
+      `http://${process.env.SUBTITLE_TRANSLATION_API_URL}/existing_language_pairs/cached`,
+      {
+        method: "GET",
+      }
+    ).then((resp) => {
+      if (!resp.ok) {
+        throw new Error(`HTTP error! status: ${resp.status}`);
+      }
+      return resp.json();
+    }).then((data) => {
+      res.status(200).json(data);
+    }).catch(error => {
+      res.status(500).json({ error: error.message });
+    });
+
+  });
+
+  // async function translateSubtitles(
+  //   srt: string,
+  //   originalLanguage: string,
+  //   targetLanguage: string
+  // ): Promise<string> {
+  //   return new Promise((resolve, reject) => {
+  //     let formData = new FormData();
+  //     formData.append("file", new Blob(srt.split("")), "subtitles.srt");
+  //     fetch(
+  //       `http://${process.env.SUBTITLE_TRANSLATION_API_URL}/translate_srt/${originalLanguage}/${targetLanguage}`,
+  //       {
+  //         method: "POST",
+  //         body: formData,
+  //       }
+  //     )
+  //       .then((response) => {
+  //         response
+  //           .text()
+  //           .then((data) => {   
+  //             peertubeHelpers.logger.info("response.text : ", data);
+  //             // json parse the response
+  //             let translatedSrt = JSON.parse(data).translated_srt;
+
+  //             resolve(translatedSrt);
+  //           })
+  //           .catch((error) => {
+  //             reject(error);
+  //           });
+  //       })
+  //       .catch((error) => {
+  //         reject(error);
+  //       });
+  //   });
+  // }
 
   async function userIdCanAccessVideo(userId?: number, videoId?: number): Promise<boolean> {
     if (typeof userId != "number" || typeof videoId != "number") {
