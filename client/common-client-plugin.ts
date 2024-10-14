@@ -15,6 +15,8 @@ let captionList: Array<{
 }> = [];
 let languages: { [id: string]: string };
 let languagePairs : string[][] = [];
+let translationready_srt : string = "";
+let translationready_targetLanguage : string = "";
 
 async function register ({
   peertubeHelpers,
@@ -128,7 +130,11 @@ async function register ({
       const cueStyleItalicElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-italic");
       const cueStyleBoldElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-bold");
       const cueStyleUnderlineElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-underline");
-      
+      const translationReadyPopup = rootEl.querySelector<HTMLDivElement>("#translation-ready-popup");
+      const translationReadyPopupText = rootEl.querySelector<HTMLParagraphElement>("#translation-ready-popup-text");
+      const translationReadySave = rootEl.querySelector<HTMLButtonElement>("#translation-ready-save");
+      const translationReadyDiscard = rootEl.querySelector<HTMLButtonElement>("#translation-ready-discard");
+
       const timestampElement = rootEl.querySelector<HTMLSpanElement>("#subtitle-timestamp");
       const vttResultElement = rootEl.querySelector<HTMLPreElement>("#subtitle-vtt-result");
       if (!cuesElement
@@ -158,7 +164,11 @@ async function register ({
         || !cueStyleItalicElement
         || !cueStyleBoldElement
         || !cueStyleUnderlineElement
-        || !vttResultElement) {
+        || !vttResultElement
+        || !translationReadyPopup
+        || !translationReadyPopupText
+        || !translationReadySave
+        || !translationReadyDiscard) {
         console.warn("unable to render missing stuff");
         alert("Something didn't load properly");
 
@@ -211,7 +221,6 @@ async function register ({
             30*1000,
           );
           setLock();
-
 
           const [
             videoDataRequest,
@@ -791,6 +800,70 @@ async function register ({
               languagePairs
           );
 
+          translationReadySave.onclick = async () => {
+            if (translationready_srt != '')
+            {
+              let formdata = new FormData();
+              formdata.append('captionfile', new Blob([translationready_srt], {type: 'text/plain'}), translationready_targetLanguage + ".srt");
+              const res = await fetch(`/api/v1/videos/${parameters.id}/captions/${translationready_targetLanguage}`, {
+                method: 'PUT',
+                body: formdata,
+                ...fetchCredentials,
+              } as any);
+
+
+              if (res.status == 204) {
+                window.location.reload();
+              }
+            }
+          };
+
+          translationReadyDiscard.onclick = () => {
+            translationReadyPopup.style.display = "none";
+          };
+          // periodically GET /check-translation to check if a translation is available
+          const checkTranslation = async () => {
+            const res = await fetch("/plugins/subtitle-translator/router/check-translation?id=" + parameters.id, fetchCredentials);
+
+            res.json().then((result : any) => {
+              console.log("check-translation", JSON.stringify(result));
+              if(result.status == 'none') {
+                console.log("No translation available & no translation pending");
+              }else if(result.status == 'pending') {
+                console.log("Translation is pending");
+
+                if(captionList.findIndex(c => c.id == '11') == -1){
+                  console.log("Adding translation pending language");
+                  captionList.unshift({
+                    id: '11',
+                    label: 'Translation pending.',
+                    changed: false,
+                    cues: []
+                  });
+    
+                  renderLanguageSelector(
+                    languageListElement,
+                    captionList,
+                    currentCaptionLanguageId,
+                    selectLanguage
+                  );
+                }
+               
+              }else if(result.status == 'done') {
+                console.log("Translation is done");
+                let label = languages[result.targetLanguage];
+                translationReadyPopup.style.display = "block";
+                translationReadyPopupText.innerText = "Translation to " + label + " is ready. Save it ?";
+
+                translationready_srt = result.srt;
+                translationready_targetLanguage = result.targetLanguage;
+              }
+            });
+
+          };
+          setInterval(checkTranslation, 15*1000);
+          checkTranslation();
+
 
           addTranslateLanguageElement.onclick = async () => {
             const videoId = parameters.id;
@@ -835,9 +908,8 @@ async function register ({
 
               console.log("Fetching captions from " + path);
 
-              let vttCaptions = await fetch(path, fetchCredentials);
 
-              await vttCaptions.text().then(async (data) => {
+              fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
 
                 let subtitleTranslationRequest = await fetch(`/plugins/subtitle-translator/router/translate?id=${videoId}`, {
                   method: 'POST',
@@ -852,19 +924,19 @@ async function register ({
                     ...fetchCredentials.headers,
                   },
                 });
-
+  
                 let translatedCaptions = await subtitleTranslationRequest.json();
-
+  
                 console.log("Request done");
                 console.log("Request Result : " + JSON.stringify(translatedCaptions));
-
+  
                 captionList.unshift({
                   id: '11',
                   label: 'Translation pending.',
                   changed: false,
                   cues: []
                 });
-
+  
                 renderLanguageSelector(
                   languageListElement,
                   captionList,
@@ -872,7 +944,6 @@ async function register ({
                   selectLanguage
                 );
               });
-
 
             }
 

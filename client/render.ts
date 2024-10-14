@@ -77,6 +77,15 @@ export const renderBasics = (parent: Element) => {
       </div>
     </div>
 
+    <div id="translation-ready-popup" class="popup">
+      <div class="popup-content">
+        <h2>Your subtitle translation is available</h2>
+        <p id="translation-ready-popup-text"></p>
+        <button class="btn btn-primary" id="translation-ready-save"> Save </button>
+        <button class="btn btn-danger" id="translation-ready-discard"> Discard </button>
+      </div>
+    </div>
+
   `;
 };
 
