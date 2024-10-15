@@ -144,9 +144,6 @@ export const renderPreview = (element: HTMLDivElement, cues: Cue[]) => {
 
 export const renderLanguageList = (element: HTMLSelectElement, languages: { id: string, label: string, disabled: boolean }[], currentCaptionLanguageId: string, languagesPair : string[][]) => {
   console.log("renderLanguageList");
-  console.log("currentCaptionLanguageId: " + currentCaptionLanguageId);
-
-  
   element.innerHTML = "";
   let count = 0;
   if(currentCaptionLanguageId) {

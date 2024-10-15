@@ -899,7 +899,7 @@ async function register ({
         
         
                       if (res.status == 204) {
-                        peertubeHelpers.notifier.success("Translation ready", "Your translation to " + label + " is ready.", 5000);
+                        peertubeHelpers.notifier.success( "Your translation to " + label + " is ready.", "Translation ready", 5000);
                         //remove translation pending language
                         captionList = captionList.filter(e => e.id != '11');
 
