@@ -12,9 +12,17 @@ async function register({
   getRouter,
   storageManager,
   registerHook,
+  registerSetting,
+  settingsManager
 }: RegisterServerOptions): Promise<void> {
-
-
+  
+  registerSetting({
+    name: "subtitle-translation-api-url",
+    type: "input",
+    label: "Subtitle translation API URL",
+    default: "http://subtitle_translator_api",
+    private: false
+  })
 
   registerHook({
     target: 'action:api.video-caption.created',
@@ -284,9 +292,11 @@ async function register({
       res.status(403).json({});
       return;
     }
+      let api_url = await settingsManager.getSetting('subtitle-translation-api-url');
+      peertubeHelpers.logger.info("api_url : ", api_url);
 
     fetch(
-      `http://${process.env.SUBTITLE_TRANSLATION_API_URL}/existing_language_pairs/cached`,
+      `${api_url}/existing_language_pairs/cached`,
       {
         method: "GET",
       }
@@ -313,30 +323,33 @@ async function register({
     return new Promise((resolve, reject) => {
       let formData = new FormData();
       formData.append("file", new Blob(srt.split("")), "subtitles.srt");
-      fetch(
-        `http://${process.env.SUBTITLE_TRANSLATION_API_URL}/translate_srt/${originalLanguage}/${targetLanguage}`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      )
-        .then((response) => {
-          response
-            .text()
-            .then((data) => {
-              peertubeHelpers.logger.info("response.text : ", data);
-              // json parse the response
-              let translatedSrt = JSON.parse(data).translated_srt;
+      settingsManager.getSetting('subtitle-translation-api-url').then((api_url) => {
+        peertubeHelpers.logger.info("api_url : ", api_url);
+        fetch(
+          `${api_url}/translate_srt/${originalLanguage}/${targetLanguage}`,
+          {
+            method: "POST",
+            body: formData,
+          }
+        )
+          .then((response) => {
+            response
+              .text()
+              .then((data) => {
+                peertubeHelpers.logger.info("response.text : ", data);
+                // json parse the response
+                let translatedSrt = JSON.parse(data).translated_srt;
 
-              resolve(translatedSrt);
-            })
-            .catch((error) => {
-              reject(error);
-            });
-        })
-        .catch((error) => {
-          reject(error);
-        });
+                resolve(translatedSrt);
+              })
+              .catch((error) => {
+                reject(error);
+              });
+          })
+          .catch((error) => {
+            reject(error);
+          });
+      });
     });
   }
 
