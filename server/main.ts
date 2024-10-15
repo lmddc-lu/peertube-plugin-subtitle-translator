@@ -27,7 +27,6 @@ async function register({
   registerHook({
     target: 'action:api.video-caption.created',
     handler: async ({ req, res } : {req:any, res:any}) => {
-      peertubeHelpers.logger.info("Caption created hook");
       // This is the request sent
       // let formdata = new FormData();
       // formdata.append('captionfile', new Blob([translationready_srt], {type: 'text/plain'}), translationready_targetLanguage + ".srt");
@@ -37,13 +36,8 @@ async function register({
       //   ...fetchCredentials,
       // } as any);
   
-      peertubeHelpers.logger.info("Caption video params: ", {params: req.params});
       
       let videoId : string = req.params.videoId;
-      let captionLanguage : string = req.params.captionLanguage;
-
-      peertubeHelpers.logger.info("Caption video videoId: ", {videoId: videoId});
-      peertubeHelpers.logger.info("Caption video captionLanguage: ", {captionLanguage: captionLanguage});
 
       
       // delete the translation from the local plugin storage
@@ -224,8 +218,6 @@ async function register({
     const user = await peertubeHelpers.user.getAuthUser(res);
     const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
 
-    peertubeHelpers.logger.info("User : ", user);
-    peertubeHelpers.logger.info("Video : ", video);
     let userCanAccess = await userIdCanAccessVideo(user.id, video.channelId);
 
     if (!user || !userCanAccess) {
@@ -235,27 +227,21 @@ async function register({
       return;
     }
 
-
-    peertubeHelpers.logger.info("Checking translation at " + "subtitle-translation-" + videoId);
     let translation = await storageManager.getData(
       "subtitle-translation-" + videoId
     );
 
     if (translation) {
-      peertubeHelpers.logger.info("Parsing translation :" + JSON.stringify(translation));
       try {
         let translation_json = translation as any;
-        peertubeHelpers.logger.info("translation_json: " + translation_json);
 
         if (translation_json.status == "done") {
-          peertubeHelpers.logger.info("Translation done");
           let response = {
             status: "done",
             targetLanguage: translation_json.targetLanguage,
             srt: translation_json.srt,
           };
 
-          peertubeHelpers.logger.info("response: " + JSON.stringify(response));
           res.status(200);
           res.json(response);
           return;
@@ -266,7 +252,6 @@ async function register({
             status: "pending",
             targetLanguage: translation_json.targetLanguage,
           };
-          peertubeHelpers.logger.info("response: " + JSON.stringify(response)); 
           res.status(200);
           res.json(response);
           return;
@@ -407,15 +392,11 @@ async function register({
       return false;
     }
 
-    peertubeHelpers.logger.info("Checking if user can access video");
-    peertubeHelpers.logger.info("user id : " + userId);
-    peertubeHelpers.logger.info("video id : " + videoId); 
     const userVideoChannelList = await queryDb<VideoChannelModel>(
       `SELECT * FROM "videoChannel" WHERE "id" = ${videoId};`
     );
     const videoChannel = userVideoChannelList[0];
 
-    peertubeHelpers.logger.info("videoChannel : ", videoChannel);
     const accountVideoChannelList = await queryDb<VideoChannelModel>(
       `SELECT * FROM "videoChannel" WHERE "accountId" = ${videoChannel.accountId};`
     );

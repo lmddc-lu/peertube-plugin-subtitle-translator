@@ -8,7 +8,7 @@ export const renderBasics = (parent: Element) => {
         <div id="subtitle-languages" class="action-bubble"></div>
         <div class="action-bubble">
           <select id="subtitle-add-language-list"></select>
-          <button id="subtitle-add-translate" class="btn btn-primary">+ translate</button>
+          <button id="subtitle-add-translate" class="btn btn-primary"> Translate </button>
         </div>
         <div class="action-bubble">
           <button id="subtitle-delete" class="btn btn-danger">Delete</button>

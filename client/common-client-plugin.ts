@@ -833,16 +833,15 @@ async function register ({
            
           // };
 
-          translationReadyDiscard.onclick = () => {
-            translationready_discard = true;
-            translationReadyPopup.style.display = "none";
-          };
           // periodically GET /check-translation to check if a translation is available
           const checkTranslation = async () => {
+            if(location.pathname != '/p/subtitles') {
+              return;
+            }
+            
             if(captionList.length == 0) {
               transcriptionPopupElement.style.display = "block";
               languageListElement.style.display = "none";
-
             }
 
             if(!translationready_discard) {
