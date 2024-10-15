@@ -71,8 +71,8 @@ async function register({
     const user = await peertubeHelpers.user.getAuthUser(res);
     peertubeHelpers.videos.loadByUrl;
     const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
-
-    if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
+    let userCanAccess = await userIdCanAccessVideo(user.id, video.channelId);
+    if (!user || !userCanAccess) {
       peertubeHelpers.logger.info("User cannot access video lock");
       res.status(403);
       res.json({});
@@ -106,8 +106,9 @@ async function register({
     const user = await peertubeHelpers.user.getAuthUser(res);
     const newState = req.body.locked as boolean;
     const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
+    let userCanAccess = await userIdCanAccessVideo(user.id, video.channelId);
 
-    if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
+    if (!user || !userCanAccess) {
       peertubeHelpers.logger.info("User cannot access video lock");
       res.status(403);
       res.json({});
@@ -141,8 +142,9 @@ async function register({
     }
     const user = await peertubeHelpers.user.getAuthUser(res);
     const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
+    let userCanAccess = await userIdCanAccessVideo(user.id, video.channelId);
 
-    if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
+    if (!user || !userCanAccess) {
       peertubeHelpers.logger.info("User cannot access video lock");
       res.status(403);
       res.json({});
@@ -224,8 +226,9 @@ async function register({
 
     peertubeHelpers.logger.info("User : ", user);
     peertubeHelpers.logger.info("Video : ", video);
+    let userCanAccess = await userIdCanAccessVideo(user.id, video.channelId);
 
-    if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
+    if (!user || !userCanAccess) {
       peertubeHelpers.logger.info("User cannot access video lock");
       res.status(403);
       res.json({});
@@ -408,9 +411,11 @@ async function register({
     peertubeHelpers.logger.info("user id : " + userId);
     peertubeHelpers.logger.info("video id : " + videoId); 
     const userVideoChannelList = await queryDb<VideoChannelModel>(
-      `SELECT * FROM "videoChannel" WHERE "id" = ${userId};`
+      `SELECT * FROM "videoChannel" WHERE "id" = ${videoId};`
     );
     const videoChannel = userVideoChannelList[0];
+
+    peertubeHelpers.logger.info("videoChannel : ", videoChannel);
     const accountVideoChannelList = await queryDb<VideoChannelModel>(
       `SELECT * FROM "videoChannel" WHERE "accountId" = ${videoChannel.accountId};`
     );
