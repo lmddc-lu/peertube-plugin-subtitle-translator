@@ -222,6 +222,9 @@ async function register({
     const user = await peertubeHelpers.user.getAuthUser(res);
     const video = await peertubeHelpers.videos.loadByIdOrUUID(videoId);
 
+    peertubeHelpers.logger.info("User : ", user);
+    peertubeHelpers.logger.info("Video : ", video);
+
     if (!user || !userIdCanAccessVideo(user.id, video.channelId)) {
       peertubeHelpers.logger.info("User cannot access video lock");
       res.status(403);
@@ -401,6 +404,9 @@ async function register({
       return false;
     }
 
+    peertubeHelpers.logger.info("Checking if user can access video");
+    peertubeHelpers.logger.info("user id : " + userId);
+    peertubeHelpers.logger.info("video id : " + videoId); 
     const userVideoChannelList = await queryDb<VideoChannelModel>(
       `SELECT * FROM "videoChannel" WHERE "id" = ${userId};`
     );
