@@ -286,10 +286,22 @@ async function register ({
             })
 
             if(res.status == 204) {
-              console.log("Requested captions");
+
+              generateTranscriptionElement.disabled = true;
+              if(generateTranscriptionElement.childNodes.length == 1){
+                const loader = document.createElement("span");
+                loader.classList.add("loader");
+                generateTranscriptionElement.appendChild(loader);
+              }
               // setTimeout(checkTranscriptionStatus, 100);
             }else if (res.status == 409){
-              // setTimeout(checkTranscriptionStatus, 100);
+              
+              generateTranscriptionElement.disabled = true;
+              if(generateTranscriptionElement.childNodes.length == 1){
+                const loader = document.createElement("span");
+                loader.classList.add("loader");
+                generateTranscriptionElement.appendChild(loader);
+              }
             }else {
               alert("Failed to request captions");
             }
@@ -434,11 +446,6 @@ async function register ({
               selectLanguage,
             );
 
-            console.log("rendering language list");
-            console.log("captionList", captionList);
-            console.log("languages", languages);
-            console.log("currentCaptionLanguageId", currentCaptionLanguageId);
-            console.log("languagePairs", languagePairs);
 
             renderLanguageList(
               addNewLanguageListElement,
@@ -832,34 +839,24 @@ async function register ({
           };
           // periodically GET /check-translation to check if a translation is available
           const checkTranslation = async () => {
-            console.log("Checking translation");
             if(captionList.length == 0) {
-              console.log("captionList is empty");
               transcriptionPopupElement.style.display = "block";
               languageListElement.style.display = "none";
 
-              generateTranscriptionElement.disabled = true;
-              if(generateTranscriptionElement.childNodes.length == 1){
-                const loader = document.createElement("span");
-                loader.classList.add("loader");
-                generateTranscriptionElement.appendChild(loader);
-              }
             }
 
             if(!translationready_discard) {
-              console.log("Checking translation");
               const res = await fetch("/plugins/subtitle-translator/router/check-translation?id=" + parameters.id, fetchCredentials);
 
               res.json().then(async (result : any) => {
-                console.log("check-translation", JSON.stringify(result));
                 if(result.status == 'none') {
-                  console.log("No translation available & no translation pending");
+                  // console.log("No translation available & no translation pending");
                 }else if(result.status == 'pending') {
-                  console.log("Translation is pending");
+                  // console.log("Translation is pending");
   
                   if(captionList.findIndex(c => c.id == '11') == -1){
 
-                    console.log("Adding translation pending language");
+                    // console.log("Adding translation pending language");
                     captionList.unshift({
                       id: '11',
                       label: 'Translation pending.',
@@ -877,7 +874,7 @@ async function register ({
                  
                 }else if(result.status == 'done') {
                   if(!translationready_discard) {
-                    console.log("Translation is ready");
+                    // console.log("Translation is ready");
                     let label = languages[result.targetLanguage];
                     // translationReadyPopup.style.display = "block";
                     // translationReadyPopupText.innerText = "Translation to " + label + " is ready. Save it ?";
@@ -888,7 +885,7 @@ async function register ({
 
                     if (translationready_srt != '')
                     {
-                      console.log("Saving translation");
+                      // console.log("Saving translation");
                       let formdata = new FormData();
                       formdata.append('captionfile', new Blob([translationready_srt], {type: 'text/plain'}), translationready_targetLanguage + ".srt");
                       const res = await fetch(`/api/v1/videos/${parameters.id}/captions/${translationready_targetLanguage}`, {
@@ -969,10 +966,10 @@ async function register ({
             const res = await fetch("/plugins/subtitle-translator/router/check-translation?id=" + parameters.id, fetchCredentials);
 
             res.json().then(async (result : any) => {
-              console.log("checking translation before starting another", JSON.stringify(result));
+              // console.log("checking translation before starting another", JSON.stringify(result));
               if(result.status == 'none') {
                 
-            console.log("Translate", originalLanguage, targetLanguage);
+            // console.log("Translate", originalLanguage, targetLanguage);
 
             if (originalLanguage == targetLanguage) {
               alert("Can't translate to the same language");
@@ -982,12 +979,12 @@ async function register ({
             if(videoId && originalLanguage && targetLanguage) {
 
 
-              console.log("Fetching captions");
+              // console.log("Fetching captions");
               let response = await fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials);
 
               const captions : any = await response.json();
 
-              console.log("Got captions" + JSON.stringify(captions));
+              // console.log("Got captions" + JSON.stringify(captions));
 
 
               // Check if the video has the captions in the original language
@@ -995,7 +992,7 @@ async function register ({
               let found = false;
               captions.data.forEach(
                 (element: { language: { id: string }; captionPath: string }) => {
-                  console.log("Checking language: " + element.language.id);
+                  // console.log("Checking language: " + element.language.id);
                   if (element.language.id === originalLanguage) {
                     path = element.captionPath;
                     found = true;
@@ -1008,7 +1005,7 @@ async function register ({
                 return;
               }
 
-              console.log("Fetching captions from " + path);
+              // console.log("Fetching captions from " + path);
 
 
               fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
@@ -1027,10 +1024,8 @@ async function register ({
                   },
                 });
   
-                let translatedCaptions = await subtitleTranslationRequest.json();
+                await subtitleTranslationRequest.json();
   
-                console.log("Request done");
-                console.log("Request Result : " + JSON.stringify(translatedCaptions));
   
                 captionList.unshift({
                   id: '11',
