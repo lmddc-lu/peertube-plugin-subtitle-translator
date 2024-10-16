@@ -173,7 +173,7 @@ async function register({
       translateSubtitles(srt, originalLanguage, targetLanguage).then(
         async (translatedSrt) => {
           peertubeHelpers.logger.info(
-            "Translate request translatedSrt: " + translatedSrt
+            "Translate request finished"
           );
           // Save the translated srt
           // Store the caption with associated video, user and language
@@ -188,9 +188,6 @@ async function register({
 
           peertubeHelpers.logger.info(
             "Translate request stored translated srt at " + "subtitle-translation-" + videoId
-          );
-          let srt = await storageManager.getData(
-            "subtitle-translation-" + videoId + "-" + targetLanguage
           );
           peertubeHelpers.logger.info("srt: " + srt);
         }
@@ -284,7 +281,6 @@ async function register({
       return;
     }
       let api_url = await settingsManager.getSetting('subtitle-translation-api-url');
-      peertubeHelpers.logger.info("api_url : ", api_url);
 
     fetch(
       `${api_url}/existing_language_pairs/cached`,
@@ -327,7 +323,6 @@ async function register({
             response
               .text()
               .then((data) => {
-                peertubeHelpers.logger.info("response.text : ", data);
                 // json parse the response
                 let translatedSrt = JSON.parse(data).translated_srt;
 
@@ -385,15 +380,15 @@ async function register({
   }
 
   async function userIdCanAccessVideo(
-    userId?: number,
-    videoId?: number
+    userID?: number,
+    channelID?: number
   ): Promise<boolean> {
-    if (typeof userId != "number" || typeof videoId != "number") {
+    if (typeof userID != "number" || typeof channelID != "number") {
       return false;
     }
 
     const userVideoChannelList = await queryDb<VideoChannelModel>(
-      `SELECT * FROM "videoChannel" WHERE "id" = ${videoId};`
+      `SELECT * FROM "videoChannel" WHERE "id" = ${channelID};`
     );
     const videoChannel = userVideoChannelList[0];
 
@@ -401,7 +396,7 @@ async function register({
       `SELECT * FROM "videoChannel" WHERE "accountId" = ${videoChannel.accountId};`
     );
     return (
-      accountVideoChannelList.find((v) => v && v.id === videoId) !== undefined
+      accountVideoChannelList.find((v) => v && v.id === channelID) !== undefined
     );
   }
 

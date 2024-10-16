@@ -240,10 +240,19 @@ async function register ({
             fetch('/plugins/subtitle-translator/router/available-pairs', fetchCredentials)
           ]);
 
+          if(languagesPairRequest.status == 500){
+            // main.innerHTML = "The subtitle translator API cannot be reached. Please check the API URL in the plugin settings.";
+            console.error("The subtitle translator API cannot be reached. Please check the API URL in the plugin settings.");
+            peertubeHelpers.showModal({title:"Error", content:"The subtitle translator API cannot be reached. Please check the API URL in the plugin settings."});
+            return;
+          }
+
           if (captionsRequest.status !== 200 || videoDataRequest.status !== 200) {
             main.innerHTML = "can't find video with id " + parameters.id;
             return;
           }
+
+         
 
           const captions: { data: VideoCaption[] } = await captionsRequest.json();
           languagePairs = await languagesPairRequest.json();
@@ -829,9 +838,6 @@ async function register ({
               languagePairs
           );
 
-          // translationReadySave.onclick = async () => {
-           
-          // };
 
           // periodically GET /check-translation to check if a translation is available
           const checkTranslation = async () => {
@@ -1003,8 +1009,6 @@ async function register ({
                 alert("No captions in the original language found");
                 return;
               }
-
-              // console.log("Fetching captions from " + path);
 
 
               fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
