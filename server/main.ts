@@ -171,7 +171,7 @@ async function register({
       peertubeHelpers.logger.info("Translate request stored pending at " + "subtitle-translation-" + videoId);
 
       translateSubtitles(srt, originalLanguage, targetLanguage).then(
-        async (translatedSrt) => {
+         (translatedSrt) => {
           peertubeHelpers.logger.info(
             "Translate request finished"
           );
@@ -191,7 +191,15 @@ async function register({
           );
           peertubeHelpers.logger.info("srt: " + srt);
         }
-      );
+      ).catch((error) => {
+        peertubeHelpers.logger.error("Error translating subtitles: " + error);
+        storageManager.storeData(
+          "subtitle-translation-" + videoId,
+          {
+            status: "none",
+          }
+        );
+      });
 
       res.status(200);
       res.json({ status: "Translation pending" });
@@ -283,7 +291,7 @@ async function register({
       let api_url = await settingsManager.getSetting('subtitle-translation-api-url');
 
     fetch(
-      `${api_url}/existing_language_pairs/cached`,
+      `${api_url}/existing_language_pairs`,
       {
         method: "GET",
       }
@@ -317,7 +325,11 @@ async function register({
           {
             method: "POST",
             body: formData,
-          }
+            headers: {
+              'Connection': 'keep-alive'
+            },
+          },
+          
         )
           .then((response) => {
             response
