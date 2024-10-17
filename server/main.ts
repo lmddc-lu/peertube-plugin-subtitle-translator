@@ -24,26 +24,22 @@ async function register({
     private: false
   })
 
+  registerSetting({
+    name: "subtitle-translation-timeout",
+    type: "input",
+    label: "Subtitle translation timeout (in minutes)",
+    default: "10",
+    private: false
+  })
+
   registerHook({
     target: 'action:api.video-caption.created',
     handler: async ({ req, res } : {req:any, res:any}) => {
-      // This is the request sent
-      // let formdata = new FormData();
-      // formdata.append('captionfile', new Blob([translationready_srt], {type: 'text/plain'}), translationready_targetLanguage + ".srt");
-      // const res = await fetch(`/api/v1/videos/${parameters.id}/captions/${translationready_targetLanguage}`, {
-      //   method: 'PUT',
-      //   body: formdata,
-      //   ...fetchCredentials,
-      // } as any);
-  
-      
       let videoId : string = req.params.videoId;
-
       
       // delete the translation from the local plugin storage
       await storageManager.storeData("subtitle-translation-" + videoId, null);
   
-      // peertubeHelpers.logger.info("deleted translation from local storage");
     }
   })
   const router = getRouter();
@@ -147,12 +143,28 @@ async function register({
 
     let originalLanguage = req.body.originalLanguage as string;
     let targetLanguage = req.body.targetLanguage as string;
+
+    // Check if a translation is already pending
+    let status = await storageManager.getData(
+      "subtitle-translation-" + videoId
+    ) as unknown as any | null;
+    
+  
+    if(status) {
+      if(status.status && (status.status == 'pending' ||  status.status == 'done')){
+        peertubeHelpers.logger.info("Translation already pending or done");
+        res.status(200);
+        res.json({ status: "Translation already pending" });
+        return;
+      }
+    }
+
     let captions = webvtt.parse(req.body.captions as string);
 
     if (captions.valid) {
       peertubeHelpers.logger.info("The vtt file is valid");
       let srt = convertToJsonToSrt(captions.cues);
-      peertubeHelpers.logger.info("Translate request srt: " + srt);
+      // peertubeHelpers.logger.info("Translate request srt: " + srt);
 
       peertubeHelpers.logger.info(
         "Translate request originalLanguage : " + originalLanguage
@@ -160,28 +172,40 @@ async function register({
       peertubeHelpers.logger.info(
         "Translate request targetLanguage: " + targetLanguage
       );
-      peertubeHelpers.logger.info("Translate request captions: " + captions);
+      // peertubeHelpers.logger.info("Translate request captions: " + captions);
 
       storageManager.storeData("subtitle-translation-" + videoId, {
         status: "pending",
         targetLanguage: targetLanguage,
+        date: new Date().toISOString(),
         srt: "",
       });
 
       peertubeHelpers.logger.info("Translate request stored pending at " + "subtitle-translation-" + videoId);
 
       translateSubtitles(srt, originalLanguage, targetLanguage).then(
-         (translatedSrt) => {
+         async (translatedSrt) => {
           peertubeHelpers.logger.info(
             "Translate request finished"
           );
           // Save the translated srt
           // Store the caption with associated video, user and language
+          let status = await storageManager.getData(
+            "subtitle-translation-" + videoId
+          ) as unknown as any | null;
+          
+          if(status && status.status != "pending"){
+            // the translation has been aborted
+            peertubeHelpers.logger.info("The translation was aborted"); 
+            return;
+          }
+
           storageManager.storeData(
             "subtitle-translation-" + videoId,
             {
               status: "done",
               targetLanguage: targetLanguage,
+              date: new Date().toISOString(),
               srt: translatedSrt,
             }
           );
@@ -189,7 +213,6 @@ async function register({
           peertubeHelpers.logger.info(
             "Translate request stored translated srt at " + "subtitle-translation-" + videoId
           );
-          peertubeHelpers.logger.info("srt: " + srt);
         }
       ).catch((error) => {
         peertubeHelpers.logger.error("Error translating subtitles: " + error);
@@ -251,16 +274,72 @@ async function register({
           res.json(response);
           return;
 
-        } else {
-          peertubeHelpers.logger.info("Translation pending");
-          let response= {
-            status: "pending",
-            targetLanguage: translation_json.targetLanguage,
-          };
-          res.status(200);
-          res.json(response);
-          return;
+        } else if(translation_json.status == "pending"){
+          if(translation_json.date){
 
+
+            let timeElapsed = (new Date().getTime() - new Date(translation_json.date).getTime());
+            peertubeHelpers.logger.info("Time elapsed waiting for translation (ms): " + timeElapsed);
+
+            let timeout = 10 * 60 * 1000;
+            let api_timeout = await settingsManager.getSetting('subtitle-translation-timeout');
+            
+            try{
+              let api_timeout_string = api_timeout.toString();
+              let api_timeout_number = parseInt(api_timeout_string);
+              timeout = api_timeout_number * 60 * 1000;
+              // peertubeHelpers.logger.info("Timeout set to: " + timeout);
+
+            } catch(error) {
+              peertubeHelpers.logger.error("Error parsing timeout: " + error);
+            }
+            peertubeHelpers.logger.info("Using timeout : " + timeout);
+            if(timeElapsed > timeout) {
+              peertubeHelpers.logger.info("Translation pending since more than 5 minutes");
+              storageManager.storeData(
+                "subtitle-translation-" + videoId,
+                {
+                  status: "none",
+                }
+              );
+  
+              res.status(200);  
+              res.json({ status: "aborted" });
+              return;
+            } else {
+              peertubeHelpers.logger.info("Translation pending");
+              let response= {
+                status: "pending",
+                targetLanguage: translation_json.targetLanguage,
+              };
+              res.status(200);
+              res.json(response);
+              return;
+            }
+           
+          }
+          else
+          {
+            // Old format, no date: cancel the translation
+            peertubeHelpers.logger.info("No date in translation, canceling translation");
+            storageManager.storeData(
+              "subtitle-translation-" + videoId,
+              {
+                status: "none",
+              }
+            );
+
+
+            res.status(200);  
+            res.json({ status: "none" });
+            return;
+          }
+
+       } else {
+          peertubeHelpers.logger.info("No translation pending");
+          res.status(200);
+          res.json({ status: "none" });
+          return;
        }
       } catch (error) {
         peertubeHelpers.logger.error("Error parsing translation: " + error);
@@ -319,7 +398,6 @@ async function register({
       let formData = new FormData();
       formData.append("file", new Blob(srt.split("")), "subtitles.srt");
       settingsManager.getSetting('subtitle-translation-api-url').then((api_url) => {
-        peertubeHelpers.logger.info("api_url : ", api_url);
         fetch(
           `${api_url}/translate_srt/${originalLanguage}/${targetLanguage}`,
           {

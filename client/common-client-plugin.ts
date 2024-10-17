@@ -881,9 +881,6 @@ async function register ({
                   if(!translationready_discard) {
                     // console.log("Translation is ready");
                     let label = languages[result.targetLanguage];
-                    // translationReadyPopup.style.display = "block";
-                    // translationReadyPopupText.innerText = "Translation to " + label + " is ready. Save it ?";
-    // 
                     translationready_srt = result.srt;
                     translationready_targetLanguage = result.targetLanguage;
 
@@ -902,6 +899,7 @@ async function register ({
         
                       if (res.status == 204) {
                         peertubeHelpers.notifier.success( "Your translation to " + label + " is ready.", "Translation ready", 5000);
+                        addTranslateLanguageElement.disabled = false;
                         //remove translation pending language
                         captionList = captionList.filter(e => e.id != '11');
 
@@ -951,6 +949,16 @@ async function register ({
 
                   }
                   
+                } else if(result.status == 'aborted'){
+                  peertubeHelpers.notifier.error("Translation aborted", "Error", 5000);
+                  addTranslateLanguageElement.disabled = false;
+                  captionList = captionList.filter(e => e.id != '11');
+                  renderLanguageSelector(
+                    languageListElement,
+                    captionList,
+                    currentCaptionLanguageId,
+                    selectLanguage
+                  );
                 }
               });
             }
@@ -973,79 +981,78 @@ async function register ({
             res.json().then(async (result : any) => {
               // console.log("checking translation before starting another", JSON.stringify(result));
               if(result.status == 'none') {
-                
-            // console.log("Translate", originalLanguage, targetLanguage);
 
-            if (originalLanguage == targetLanguage) {
-              alert("Can't translate to the same language");
-              return;
-            }
-
-            if(videoId && originalLanguage && targetLanguage) {
-
-
-              // console.log("Fetching captions");
-              let response = await fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials);
-
-              const captions : any = await response.json();
-
-              // console.log("Got captions" + JSON.stringify(captions));
-
-
-              // Check if the video has the captions in the original language
-              let path = "";
-              let found = false;
-              captions.data.forEach(
-                (element: { language: { id: string }; captionPath: string }) => {
-                  // console.log("Checking language: " + element.language.id);
-                  if (element.language.id === originalLanguage) {
-                    path = element.captionPath;
-                    found = true;
-                  }
+                if (originalLanguage == targetLanguage) {
+                  alert("Can't translate to the same language");
+                  return;
                 }
-              );
 
-              if (!found) {
-                alert("No captions in the original language found");
-                return;
-              }
+                if(videoId && originalLanguage && targetLanguage) {
 
 
-              fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
+                  // console.log("Fetching captions");
+                  let response = await fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials);
 
-                let subtitleTranslationRequest = await fetch(`/plugins/subtitle-translator/router/translate?id=${videoId}`, {
-                  method: 'POST',
-                  body: JSON.stringify({
-                    originalLanguage: originalLanguage,
-                    targetLanguage: targetLanguage,
-                    captions: data,
-                  }),
-                  headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json',
-                    ...fetchCredentials.headers,
-                  },
-                });
-  
-                await subtitleTranslationRequest.json();
-  
-  
-                captionList.unshift({
-                  id: '11',
-                  label: 'Translation pending.',
-                  changed: false,
-                  cues: []
-                });
-  
-                renderLanguageSelector(
-                  languageListElement,
-                  captionList,
-                  currentCaptionLanguageId,
-                  selectLanguage
-                );
-              });
+                  const captions : any = await response.json();
 
-            }
+                  // console.log("Got captions" + JSON.stringify(captions));
+
+
+                  // Check if the video has the captions in the original language
+                  let path = "";
+                  let found = false;
+                  captions.data.forEach(
+                    (element: { language: { id: string }; captionPath: string }) => {
+                      // console.log("Checking language: " + element.language.id);
+                      if (element.language.id === originalLanguage) {
+                        path = element.captionPath;
+                        found = true;
+                      }
+                    }
+                  );
+
+                  if (!found) {
+                    alert("No captions in the original language found");
+                    return;
+                  }
+
+
+                  fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
+
+                    let subtitleTranslationRequest = await fetch(`/plugins/subtitle-translator/router/translate?id=${videoId}`, {
+                      method: 'POST',
+                      body: JSON.stringify({
+                        originalLanguage: originalLanguage,
+                        targetLanguage: targetLanguage,
+                        captions: data,
+                      }),
+                      headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        ...fetchCredentials.headers,
+                      },
+                    });
+      
+                    await subtitleTranslationRequest.json();
+      
+                    addTranslateLanguageElement.disabled = true;
+
+                    captionList.unshift({
+                      id: '11',
+                      label: 'Translation pending.',
+                      changed: false,
+                      cues: []
+                    });
+      
+                    renderLanguageSelector(
+                      languageListElement,
+                      captionList,
+                      currentCaptionLanguageId,
+                      selectLanguage
+                    );
+                  });
+
+                }
 
               }
             });
