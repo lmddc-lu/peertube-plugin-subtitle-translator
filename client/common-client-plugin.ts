@@ -54,7 +54,7 @@ async function register ({
         videoId = videoInfo.uuid;
       }
       const link = document.createElement("a")
-      link.innerText = 'Open subtitle editor'
+      link.innerText = 'Subtitle translator'
       link.classList.add("nav-link")
       link.classList.add("nav-item")
       link.href = "/p/subtitles?id=" + videoId
