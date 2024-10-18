@@ -32,6 +32,14 @@ async function register({
     private: false
   })
 
+  registerSetting({
+    name: "subtitle-translation-language-pool",
+    type: "input",
+    label: "List of languages for translation (comma separated), leave empty for all: Supported language codes: aav,aed,af,alv,am,ar,art,ase,az,bat,bcl,be,bem,ber,bg,bi,bn,bnt,bzs,ca,cau,ccs,ceb,cel,chk,cpf,crs,cs,csg,csn,cus,cy,da,de,dra,ee,efi,el,en,eo,es,et,eu,euq,fi,fj,fr,fse,ga,gaa,gil,gl,grk,guw,gv,ha,he,hi,hil,ho,hr,ht,hu,hy,id,ig,ilo,is,iso,it,ja,jap,ka,kab,kg,kj,kl,ko,kqn,kwn,kwy,lg,ln,loz,lt,lu,lua,lue,lun,luo,lus,lv,map,mfe,mfs,mg,mh,mk,mkh,ml,mos,mr,ms,mt,mul,ng,nic,niu,nl,no,nso,ny,nyk,om,pa,pag,pap,phi,pis,pl,pon,poz,pqe,pqw,prl,pt,rn,rnd,ro,roa,ru,run,rw,sal,sg,sh,sit,sk,sl,sm,sn,sq,srn,ss,ssp,st,sv,sw,swc,taw,tdt,th,ti,tiv,tl,tll,tn,to,toi,tpi,tr,trk,ts,tum,tut,tvl,tw,ty,tzo,uk,umb,ur,ve,vi,vsl,wa,wal,war,wls,xh,yap,yo,yua,zai,zh,zne",
+    default: "",
+    private: true
+  })
+
   registerHook({
     target: 'action:api.video-caption.created',
     handler: async ({ req, res } : {req:any, res:any}) => {
@@ -368,9 +376,31 @@ async function register({
       return;
     }
       let api_url = await settingsManager.getSetting('subtitle-translation-api-url');
+      let language_pool = await settingsManager.getSetting('subtitle-translation-language-pool');
+
+      let parameters = '';
+      
+      if(language_pool) {
+        let language_pool_str = (language_pool as string);
+        if(language_pool_str != ''){
+          let language_list = language_pool_str.split(',');
+  
+          for(let i = 0; i < language_list.length; i++){
+            if(i == 0){
+              parameters += `?desired_languages=${language_list[i]}`;
+            }
+            else {
+              parameters += `&desired_languages=${language_list[i]}`;
+            }
+          }
+  
+        }
+  
+      }
+     
 
     fetch(
-      `${api_url}/existing_language_pairs`,
+      `${api_url}/existing_language_pairs${parameters}`,
       {
         method: "GET",
       }
