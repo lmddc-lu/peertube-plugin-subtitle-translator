@@ -1,74 +1,95 @@
-import type { RegisterClientOptions } from '@peertube/peertube-types/client'
-import { PeerTubePlayer } from '@peertube/embed-api'
+import type { RegisterClientOptions } from "@peertube/peertube-types/client";
+import { PeerTubePlayer } from "@peertube/embed-api";
 import vtt from "vtt.js";
-import { generateVTT, renderBasics, renderCueTable, renderLanguageList, renderLanguageSelector, renderPreview, renderTimeline, TimelineClickBox, timelineSecondLength } from './render';
-import { formatTime } from './util';
-import { VideoCaption, VideoDetails, VideoFile } from '@peertube/peertube-types/peertube-models';
-import { Cue, TextSTyle } from './types';
+import {
+  generateVTT,
+  renderBasics,
+  renderCueTable,
+  renderLanguageList,
+  renderLanguageSelector,
+  renderPreview,
+  renderTimeline,
+  TimelineClickBox,
+  timelineSecondLength,
+} from "./render";
+import { formatTime } from "./util";
+import {
+  VideoCaption,
+  VideoDetails,
+  VideoFile,
+} from "@peertube/peertube-types/peertube-models";
+import { Cue, TextSTyle } from "./types";
 
 const newCueLength = 3;
 let captionList: Array<{
-  id : string
-  label: string
-  changed: boolean
-  cues: Cue[]
+  id: string;
+  label: string;
+  changed: boolean;
+  cues: Cue[];
 }> = [];
 let languages: { [id: string]: string };
-let languagePairs : string[][] = [];
-let translationready_srt : string = "";
-let translationready_targetLanguage : string = "";
-let translationready_discard : boolean = false;
+let languagePairs: string[][] = [];
+let translationready_srt: string = "";
+let translationready_targetLanguage: string = "";
+let waitingForTranscription: boolean = false;
 
-async function register ({
+async function register({
   peertubeHelpers,
   registerHook,
   registerClientRoute,
 }: RegisterClientOptions): Promise<void> {
-
   // const message = await peertubeHelpers.translate('Hello world')
-  translationready_discard = false;
   registerHook({
-    target: 'action:video-edit.init',
+    target: "action:video-edit.init",
     handler: async (data: any) => {
       // Required on all requests as videos might be private or otherwise limited to specific accounts
       const fetchCredentials: RequestInit = {
-        credentials: 'include',
+        credentials: "include",
         headers: {
-          "authorization": "Bearer " + localStorage.getItem("access_token") || "",
+          authorization: "Bearer " + localStorage.getItem("access_token") || "",
         },
       };
 
-      const videoIdMatch = window.location.pathname.match(/(?!\/videos\/update\/)[\d\w\-]*$/);
+      const videoIdMatch = window.location.pathname.match(
+        /(?!\/videos\/update\/)[\d\w\-]*$/
+      );
       if (!videoIdMatch || videoIdMatch.length == 0) {
-        alert("No id found")
+        alert("No id found");
         return;
       }
       let videoId = videoIdMatch[0];
-      if (!videoId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+      if (
+        !videoId.match(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+        )
+      ) {
         // Prefer UUID format as lock mechanism doesn't work with short id
-        const videoInfoReq = await fetch("/api/v1/videos/" + videoId, fetchCredentials);
+        const videoInfoReq = await fetch(
+          "/api/v1/videos/" + videoId,
+          fetchCredentials
+        );
         if (videoInfoReq.status != 200) {
           return;
         }
         const videoInfo = await videoInfoReq.json();
         videoId = videoInfo.uuid;
       }
-      const link = document.createElement("a")
-      link.innerText = 'Subtitle translator'
-      link.classList.add("nav-link")
-      link.classList.add("nav-item")
-      link.href = "/p/subtitles?id=" + videoId
-      document.querySelector('.video-edit .nav-tabs')?.appendChild(link)
-    }
-  })
+      const link = document.createElement("a");
+      link.innerText = "Subtitle translator";
+      link.classList.add("nav-link");
+      link.classList.add("nav-item");
+      link.href = "/p/subtitles?id=" + videoId;
+      document.querySelector(".video-edit .nav-tabs")?.appendChild(link);
+    },
+  });
 
   registerClientRoute({
-    route: 'subtitles',
+    route: "subtitles",
     onMount: async ({ rootEl }: { rootEl: HTMLDivElement }) => {
       const main = document.createElement("div");
       main.setAttribute("class", "margin-content row");
       rootEl.appendChild(main);
-      
+
       let videoPosition = 0;
       let videoDuration = 1;
       let videoIsPlaying = false;
@@ -84,97 +105,161 @@ async function register ({
 
       // Required on all requests as videos might be private or otherwise limited to specific accounts
       const fetchCredentials: RequestInit = {
-        credentials: 'include',
+        credentials: "include",
         headers: {
-          "authorization": "Bearer " + localStorage.getItem("access_token") || "",
+          authorization: "Bearer " + localStorage.getItem("access_token") || "",
         },
       };
 
       const getVTTDataFromUrl = async (url: string) => {
-        return await fetch(url, fetchCredentials).then(d => d.text()).then(data => {
-          let cues: any[] = [];
-          const vttParser = new vtt.WebVTT.Parser(window, vtt.WebVTT.StringDecoder());
-          vttParser.oncue = (cue: any) => {
-            cues.push(cue);
-          };
-          vttParser.parse(data);
-          vttParser.flush();
-      
-          return { cues };
-        });
+        return await fetch(url, fetchCredentials)
+          .then((d) => d.text())
+          .then((data) => {
+            let cues: any[] = [];
+            const vttParser = new vtt.WebVTT.Parser(
+              window,
+              vtt.WebVTT.StringDecoder()
+            );
+            vttParser.oncue = (cue: any) => {
+              cues.push(cue);
+            };
+            vttParser.parse(data);
+            vttParser.flush();
+
+            return { cues };
+          });
       };
 
       renderBasics(rootEl);
       const cuesElement = rootEl.querySelector("#subtitle-cues");
       const videoViewerElement = rootEl.querySelector("#subtitle-video-viewer");
-      const previewElement = rootEl.querySelector<HTMLDivElement>("#subtitle-preview");
-      
-      const cueInputElement = rootEl.querySelector<HTMLTextAreaElement>("#subtitle-cue-input");
-      const cueSetStartElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-set-start")
-      const cueSetEndElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-set-end")
-      const cueInsertCueElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-insert-new")
-      const cueInsertCueAfterElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-insert-new-after")
-      const cueInsertCueAfterSelectedElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-insert-new-selected")
-      const cueSelectCurrentCueElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-select-current")
-      const languageListElement = rootEl.querySelector<HTMLDivElement>("#subtitle-languages")
-      const seekPlusElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-seek-plus-1");
-      const pausePlayElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-pause-play");
-      const seekMinusElement = rootEl.querySelector<HTMLDivElement>("#subtitle-seek-minus-1");
-      const addNewLanguageListElement = rootEl.querySelector<HTMLSelectElement>("#subtitle-add-language-list");
-      const addTranslateLanguageElement = rootEl.querySelector<HTMLButtonElement>('#subtitle-add-translate')
-      const saveCurrentLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-save");
-      const deleteCurrentLanguageElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-delete");
-      const timelineElement = rootEl.querySelector<HTMLCanvasElement>("#subtitle-timeline");
-      const padCuesElement = rootEl.querySelector<HTMLInputElement>("#subtitle-pad-cues");
-      const deleteCueElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-delete-cue");
-      const visualizeAudioElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-visualize-audio");
-      const visualizeAudioSizeElement = rootEl.querySelector<HTMLSpanElement>("#subtitle-visualize-audio-size");
-      const cueStyleItalicElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-italic");
-      const cueStyleBoldElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-bold");
-      const cueStyleUnderlineElement = rootEl.querySelector<HTMLButtonElement>("#subtitle-cue-style-underline");
-      const translationReadyPopup = rootEl.querySelector<HTMLDivElement>("#translation-ready-popup");
-      const translationReadyPopupText = rootEl.querySelector<HTMLParagraphElement>("#translation-ready-popup-text");
-      const translationReadySave = rootEl.querySelector<HTMLButtonElement>("#translation-ready-save");
-      const translationReadyDiscard = rootEl.querySelector<HTMLButtonElement>("#translation-ready-discard");
-      const transcriptionPopupElement = rootEl.querySelector<HTMLDivElement>("#transcription-popup");
-      const generateTranscriptionElement = rootEl.querySelector<HTMLButtonElement>("#generate-transcription");
+      const previewElement =
+        rootEl.querySelector<HTMLDivElement>("#subtitle-preview");
 
-      const timestampElement = rootEl.querySelector<HTMLSpanElement>("#subtitle-timestamp");
-      const vttResultElement = rootEl.querySelector<HTMLPreElement>("#subtitle-vtt-result");
-      if (!cuesElement
-        || !videoViewerElement
-        || !previewElement
-        || !seekPlusElement
-        || !pausePlayElement
-        || !seekMinusElement
-        || !cueInputElement
-        || !cueSetStartElement
-        || !cueSetEndElement
-        || !cueInsertCueElement
-        || !cueInsertCueAfterElement
-        || !cueInsertCueAfterSelectedElement
-        || !cueSelectCurrentCueElement
-        || !timestampElement
-        || !languageListElement
-        || !addNewLanguageListElement
-        || !addTranslateLanguageElement
-        || !saveCurrentLanguageElement
-        || !deleteCurrentLanguageElement
-        || !timelineElement
-        || !padCuesElement
-        || !deleteCueElement
-        || !visualizeAudioElement
-        || !visualizeAudioSizeElement
-        || !cueStyleItalicElement
-        || !cueStyleBoldElement
-        || !cueStyleUnderlineElement
-        || !vttResultElement
-        || !translationReadyPopup
-        || !translationReadyPopupText
-        || !translationReadySave
-        || !translationReadyDiscard
-        || !transcriptionPopupElement 
-        || !generateTranscriptionElement) {
+      const cueInputElement = rootEl.querySelector<HTMLTextAreaElement>(
+        "#subtitle-cue-input"
+      );
+      const cueSetStartElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-set-start"
+      );
+      const cueSetEndElement =
+        rootEl.querySelector<HTMLButtonElement>("#subtitle-set-end");
+      const cueInsertCueElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-insert-new"
+      );
+      const cueInsertCueAfterElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-insert-new-after"
+      );
+      const cueInsertCueAfterSelectedElement =
+        rootEl.querySelector<HTMLButtonElement>(
+          "#subtitle-insert-new-selected"
+        );
+      const cueSelectCurrentCueElement =
+        rootEl.querySelector<HTMLButtonElement>("#subtitle-select-current");
+      const languageListElement = rootEl.querySelector<HTMLDivElement>(
+        "#subtitle-languages"
+      );
+      const seekPlusElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-seek-plus-1"
+      );
+      const pausePlayElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-pause-play"
+      );
+      const seekMinusElement = rootEl.querySelector<HTMLDivElement>(
+        "#subtitle-seek-minus-1"
+      );
+      const addNewLanguageListElement = rootEl.querySelector<HTMLSelectElement>(
+        "#subtitle-add-language-list"
+      );
+      const addTranslateLanguageElement =
+        rootEl.querySelector<HTMLButtonElement>("#subtitle-add-translate");
+      const saveCurrentLanguageElement =
+        rootEl.querySelector<HTMLButtonElement>("#subtitle-save");
+      const deleteCurrentLanguageElement =
+        rootEl.querySelector<HTMLButtonElement>("#subtitle-delete");
+      const timelineElement =
+        rootEl.querySelector<HTMLCanvasElement>("#subtitle-timeline");
+      const padCuesElement =
+        rootEl.querySelector<HTMLInputElement>("#subtitle-pad-cues");
+      const deleteCueElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-delete-cue"
+      );
+      const visualizeAudioElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-visualize-audio"
+      );
+      const visualizeAudioSizeElement = rootEl.querySelector<HTMLSpanElement>(
+        "#subtitle-visualize-audio-size"
+      );
+      const cueStyleItalicElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-cue-style-italic"
+      );
+      const cueStyleBoldElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-cue-style-bold"
+      );
+      const cueStyleUnderlineElement = rootEl.querySelector<HTMLButtonElement>(
+        "#subtitle-cue-style-underline"
+      );
+      const translationReadyPopup = rootEl.querySelector<HTMLDivElement>(
+        "#translation-ready-popup"
+      );
+      const translationReadyPopupText =
+        rootEl.querySelector<HTMLParagraphElement>(
+          "#translation-ready-popup-text"
+        );
+      const translationReadySave = rootEl.querySelector<HTMLButtonElement>(
+        "#translation-ready-save"
+      );
+      const translationReadyDiscard = rootEl.querySelector<HTMLButtonElement>(
+        "#translation-ready-discard"
+      );
+      const transcriptionPopupElement = rootEl.querySelector<HTMLDivElement>(
+        "#transcription-popup"
+      );
+      const generateTranscriptionElement =
+        rootEl.querySelector<HTMLButtonElement>("#generate-transcription");
+
+      const timestampElement = rootEl.querySelector<HTMLSpanElement>(
+        "#subtitle-timestamp"
+      );
+      const vttResultElement = rootEl.querySelector<HTMLPreElement>(
+        "#subtitle-vtt-result"
+      );
+      if (
+        !cuesElement ||
+        !videoViewerElement ||
+        !previewElement ||
+        !seekPlusElement ||
+        !pausePlayElement ||
+        !seekMinusElement ||
+        !cueInputElement ||
+        !cueSetStartElement ||
+        !cueSetEndElement ||
+        !cueInsertCueElement ||
+        !cueInsertCueAfterElement ||
+        !cueInsertCueAfterSelectedElement ||
+        !cueSelectCurrentCueElement ||
+        !timestampElement ||
+        !languageListElement ||
+        !addNewLanguageListElement ||
+        !addTranslateLanguageElement ||
+        !saveCurrentLanguageElement ||
+        !deleteCurrentLanguageElement ||
+        !timelineElement ||
+        !padCuesElement ||
+        !deleteCueElement ||
+        !visualizeAudioElement ||
+        !visualizeAudioSizeElement ||
+        !cueStyleItalicElement ||
+        !cueStyleBoldElement ||
+        !cueStyleUnderlineElement ||
+        !vttResultElement ||
+        !translationReadyPopup ||
+        !translationReadyPopupText ||
+        !translationReadySave ||
+        !translationReadyDiscard ||
+        !transcriptionPopupElement ||
+        !generateTranscriptionElement
+      ) {
         console.warn("unable to render missing stuff");
         alert("Something didn't load properly");
 
@@ -186,21 +271,32 @@ async function register ({
         text: cssStyles.getPropertyValue("--mainForegroundColor"),
         box: cssStyles.getPropertyValue("--greyBackgroundColor"),
         audioBars: cssStyles.getPropertyValue("--mainColorLighter"),
-      }
+      };
 
-      const [_, query] = location.href.split('?')
+      const [_, query] = location.href.split("?");
       if (query) {
-        const parameters = query.split('&').map(p => p.split('=')).reduce((acc, [k, v]) => {
-          acc[k] = v
-          return acc
-        }, {} as {[key: string]: string})
+        const parameters = query
+          .split("&")
+          .map((p) => p.split("="))
+          .reduce((acc, [k, v]) => {
+            acc[k] = v;
+            return acc;
+          }, {} as { [key: string]: string });
 
         if (parameters.id) {
           const originalHref = location.href;
 
-          const lock = await (await fetch("/plugins/subtitle-translator/router/lock?id=" + parameters.id, fetchCredentials)).json();
-          if (lock.locked && new Date().getTime() < new Date(lock.changed).getTime() + 60*1000) {
-            alert("Someone might be editing! If this is not you, make sure to coordinate with the other person or risk loosing data");
+          const lock = await (
+            await fetch(
+              "/plugins/subtitle-translator/router/lock?id=" + parameters.id,
+              fetchCredentials
+            )
+          ).json();
+          if (
+            lock.locked &&
+            new Date().getTime() < new Date(lock.changed).getTime() + 60 * 1000
+          ) {
+            peertubeHelpers.notifier.info("If this is not you, make sure to coordinate with the other person or risk loosing data.", "Someone might be editing!");
           }
           let lockInterval: NodeJS.Timeout;
           const setLock = () => {
@@ -212,70 +308,82 @@ async function register ({
               "/plugins/subtitle-translator/router/lock?id=" + parameters.id,
               {
                 body: JSON.stringify({ locked: true }),
-                method: 'PUT',
+                method: "PUT",
                 ...fetchCredentials,
                 headers: {
-                  'Accept': 'application/json',
-                  'Content-Type': 'application/json',
+                  Accept: "application/json",
+                  "Content-Type": "application/json",
                   ...fetchCredentials.headers,
                 },
               }
             );
           };
-          lockInterval = setInterval(
-            setLock,
-            30*1000,
-          );
+          lockInterval = setInterval(setLock, 30 * 1000);
           setLock();
 
           const [
             videoDataRequest,
             captionsRequest,
             languagesRequest,
-            languagesPairRequest
+            languagesPairRequest,
           ] = await Promise.all([
             fetch(`/api/v1/videos/${parameters.id}`, fetchCredentials),
             fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials),
             fetch("/api/v1/videos/languages", fetchCredentials),
-            fetch('/plugins/subtitle-translator/router/available-pairs', fetchCredentials)
+            fetch(
+              "/plugins/subtitle-translator/router/available-pairs",
+              fetchCredentials
+            ),
           ]);
 
-          if(languagesPairRequest.status == 500){
+          if (languagesPairRequest.status == 500) {
             // main.innerHTML = "The subtitle translator API cannot be reached. Please check the API URL in the plugin settings.";
-            console.error("The subtitle translator API cannot be reached. Please check the API URL in the plugin settings.");
-            peertubeHelpers.showModal({title:"Error", content:"The subtitle translator API cannot be reached. Please check the API URL in the plugin settings."});
+            console.error(
+              "The subtitle translator API cannot be reached. Please check the API URL in the plugin settings."
+            );
+            peertubeHelpers.showModal({
+              title: "Error",
+              content:
+                "The subtitle translator API cannot be reached. Please check the API URL in the plugin settings.",
+            });
             return;
           }
 
-          if (captionsRequest.status !== 200 || videoDataRequest.status !== 200) {
+          if (
+            captionsRequest.status !== 200 ||
+            videoDataRequest.status !== 200
+          ) {
             main.innerHTML = "can't find video with id " + parameters.id;
             return;
           }
 
-         
-
-          const captions: { data: VideoCaption[] } = await captionsRequest.json();
+          const captions: { data: VideoCaption[] } =
+            await captionsRequest.json();
           languagePairs = await languagesPairRequest.json();
           languages = await languagesRequest.json();
-          
-          captionList = await Promise.all(captions.data.map(async c => ({
-            id: c.language.id,
-            label: c.language.label,
-            changed: false,
-            cues: (await getVTTDataFromUrl(c.captionPath)).cues.map<Cue>(c => {
-              const text = getStyledText(c.text);
-              return {
-                id: c.id,
-                startTime: c.startTime,
-                endTime: c.endTime,
-                text: text.text,
-                align: c.align,
-                style: text.style,
-              };
-            }),
-          })));
+
+          captionList = await Promise.all(
+            captions.data.map(async (c) => ({
+              id: c.language.id,
+              label: c.language.label,
+              changed: false,
+              cues: (
+                await getVTTDataFromUrl(c.captionPath)
+              ).cues.map<Cue>((c) => {
+                const text = getStyledText(c.text);
+                return {
+                  id: c.id,
+                  startTime: c.startTime,
+                  endTime: c.endTime,
+                  text: text.text,
+                  align: c.align,
+                  style: text.style,
+                };
+              }),
+            }))
+          );
           window.addEventListener("beforeunload", (e) => {
-            const changedCaptions = captionList.find(c => c.changed);
+            const changedCaptions = captionList.find((c) => c.changed);
             if (changedCaptions) {
               // Most browsers displays a default message instead of this
               const message = `Unsaved changes in ${changedCaptions.label}, leave now?`;
@@ -287,36 +395,34 @@ async function register ({
             return;
           });
 
-
           generateTranscriptionElement.onclick = async () => {
-            const res = await fetch(`/api/v1/videos/${parameters.id}/captions/generate`, {
-              method: 'POST',
-              ...fetchCredentials
-            })
+            const res = await fetch(
+              `/api/v1/videos/${parameters.id}/captions/generate`,
+              {
+                method: "POST",
+                ...fetchCredentials,
+              }
+            );
 
-            if(res.status == 204) {
-
+            if (res.status == 204) {
               generateTranscriptionElement.disabled = true;
-              if(generateTranscriptionElement.childNodes.length == 1){
+              if (generateTranscriptionElement.childNodes.length == 1) {
                 const loader = document.createElement("span");
                 loader.classList.add("loader");
                 generateTranscriptionElement.appendChild(loader);
               }
-              // setTimeout(checkTranscriptionStatus, 100);
-            }else if (res.status == 409){
-              
+            } else if (res.status == 409) {
               generateTranscriptionElement.disabled = true;
-              if(generateTranscriptionElement.childNodes.length == 1){
+              if (generateTranscriptionElement.childNodes.length == 1) {
                 const loader = document.createElement("span");
                 loader.classList.add("loader");
                 generateTranscriptionElement.appendChild(loader);
               }
-            }else {
+            } else {
               alert("Failed to request captions");
             }
-          }
-          
-          
+          };
+
           const videoData: VideoDetails = await videoDataRequest.json();
 
           videoDuration = videoData.duration;
@@ -325,10 +431,16 @@ async function register ({
           playerIframeEl.setAttribute("title", videoData.name);
           playerIframeEl.setAttribute("width", "100%");
           playerIframeEl.setAttribute("height", "100%");
-          playerIframeEl.setAttribute("src", "/videos/embed/" + parameters.id + "?api=1");
+          playerIframeEl.setAttribute(
+            "src",
+            "/videos/embed/" + parameters.id + "?api=1"
+          );
           playerIframeEl.setAttribute("frameborder", "0");
           playerIframeEl.setAttribute("allowfullscreen", "");
-          playerIframeEl.setAttribute("sandbox", "allow-same-origin allow-scripts allow-popups");
+          playerIframeEl.setAttribute(
+            "sandbox",
+            "allow-same-origin allow-scripts allow-popups"
+          );
           videoViewerElement.appendChild(playerIframeEl);
           let player = new PeerTubePlayer(playerIframeEl);
           seekPlusElement.onclick = async () => player.seek(videoPosition + 1);
@@ -348,10 +460,12 @@ async function register ({
             if (
               e.defaultPrevented ||
               e.target == cueInputElement ||
-              (e.target && (
-                (e.target as any).tagName == "BUTTON" || (e.target as any).tagName == "A" || (e.target as any).tagName == "INPUT")
-              )
-            ) return;
+              (e.target &&
+                ((e.target as any).tagName == "BUTTON" ||
+                  (e.target as any).tagName == "A" ||
+                  (e.target as any).tagName == "INPUT"))
+            )
+              return;
             if (e.key == " ") {
               e.preventDefault();
               if (videoIsPlaying) {
@@ -368,18 +482,21 @@ async function register ({
             }
           };
 
-          const smalestVideoFile = videoData.streamingPlaylists.reduce((acc, l) => {
-            // Assume all streamin playlists and files contain the same audio
-            const smalestFile = l.files.reduce((acc, f) => {
-              if (!acc) return f;
-              if (f.size < acc.size) return f;
-              return acc;
-            });
+          const smalestVideoFile = videoData.streamingPlaylists.reduce(
+            (acc, l) => {
+              // Assume all streamin playlists and files contain the same audio
+              const smalestFile = l.files.reduce((acc, f) => {
+                if (!acc) return f;
+                if (f.size < acc.size) return f;
+                return acc;
+              });
 
-            if (!acc) return smalestFile;
-            if (smalestFile.size < acc.size) return smalestFile;
-            return acc;
-          }, undefined as undefined | VideoFile);
+              if (!acc) return smalestFile;
+              if (smalestFile.size < acc.size) return smalestFile;
+              return acc;
+            },
+            undefined as undefined | VideoFile
+          );
           visualizeAudioElement.onclick = async () => {
             if (!smalestVideoFile) {
               alert("Unable to find video file");
@@ -391,29 +508,39 @@ async function register ({
 
             const audioData = await fetch(
               smalestVideoFile.fileUrl,
-              smalestVideoFile.fileUrl.startsWith(location.origin) ? fetchCredentials : {},
+              smalestVideoFile.fileUrl.startsWith(location.origin)
+                ? fetchCredentials
+                : {}
             );
             const audioCtx = new AudioContext();
-            const buffer = await audioCtx.decodeAudioData(await audioData.arrayBuffer());
-            
+            const buffer = await audioCtx.decodeAudioData(
+              await audioData.arrayBuffer()
+            );
+
             const data = buffer.getChannelData(0);
             const step = buffer.sampleRate * audioBarsInterval;
-            audioBars = new Float32Array(buffer.length/step);
+            audioBars = new Float32Array(buffer.length / step);
             let maxBar = 0;
-            for (let sampleIndex = 0; sampleIndex < buffer.length; sampleIndex += step) {
+            for (
+              let sampleIndex = 0;
+              sampleIndex < buffer.length;
+              sampleIndex += step
+            ) {
               let v = 0;
-              for (let i = sampleIndex; i < sampleIndex + step; i ++) {
+              for (let i = sampleIndex; i < sampleIndex + step; i++) {
                 // v += data[i];
                 v = Math.max(v, data[i]);
               }
-              audioBars[sampleIndex/step] = v;
+              audioBars[sampleIndex / step] = v;
               maxBar = Math.max(maxBar, v || 0);
             }
             // Normalize
-            audioBars = audioBars.map(v => v/maxBar);
+            audioBars = audioBars.map((v) => v / maxBar);
             visualizeAudioElement.style.display = "none";
           };
-          visualizeAudioSizeElement.innerText = smalestVideoFile ? Math.round(smalestVideoFile.size/1000000) + " mb." : "?";
+          visualizeAudioSizeElement.innerText = smalestVideoFile
+            ? Math.round(smalestVideoFile.size / 1000000) + " mb."
+            : "?";
 
           const selectLanguage = (languageId?: string) => {
             if (!languageId) {
@@ -421,28 +548,40 @@ async function register ({
                 languageListElement,
                 captionList,
                 currentCaptionLanguageId,
-                selectLanguage,
+                selectLanguage
               );
-              
+
               renderLanguageList(
                 addNewLanguageListElement,
                 Object.keys(languages)
-                  .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+                  .map((id) => ({
+                    id,
+                    label: languages[id],
+                    disabled: captionList.findIndex((c) => c.id == id) != -1,
+                  }))
                   .sort((a, b) => a.label.localeCompare(b.label)),
-                  currentCaptionLanguageId, 
-                  languagePairs
+                currentCaptionLanguageId,
+                languagePairs
               );
 
-              renderCueTable(cuesElement, [], { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+              renderCueTable(cuesElement, [], {
+                time: videoPosition,
+                onCueSelected: (cue) => selectCue(cue),
+              });
 
               return;
             }
 
             currentCaptionLanguageId = languageId;
 
-            const captionData = captionList.find(e => e.id == currentCaptionLanguageId);
+            const captionData = captionList.find(
+              (e) => e.id == currentCaptionLanguageId
+            );
             if (!captionData) {
-              alert("Could not find captions that was expected to be here: " + currentCaptionLanguageId);
+              alert(
+                "Could not find captions that was expected to be here: " +
+                  currentCaptionLanguageId
+              );
               return;
             }
 
@@ -452,25 +591,32 @@ async function register ({
               languageListElement,
               captionList,
               currentCaptionLanguageId,
-              selectLanguage,
+              selectLanguage
             );
-
 
             renderLanguageList(
               addNewLanguageListElement,
               Object.keys(languages)
-                .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+                .map((id) => ({
+                  id,
+                  label: languages[id],
+                  disabled: captionList.findIndex((c) => c.id == id) != -1,
+                }))
                 .sort((a, b) => a.label.localeCompare(b.label)),
-                currentCaptionLanguageId,
-                languagePairs
-            )
-        
+              currentCaptionLanguageId,
+              languagePairs
+            );
 
             cueSelectCurrentCueElement.onclick = () => {
-              const cue = captionData.cues.find(c => c.startTime < videoPosition && videoPosition < c.endTime);
+              const cue = captionData.cues.find(
+                (c) => c.startTime < videoPosition && videoPosition < c.endTime
+              );
               if (cue) {
                 selectCue(cue);
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
               }
             };
             cueInsertCueElement.onclick = () => {
@@ -485,26 +631,34 @@ async function register ({
               captionData.cues.push(cue);
               captionData.cues.sort((a, b) => a.startTime - b.startTime);
               selectCue(cue);
-              renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+              renderCueTable(cuesElement, captionData.cues, {
+                time: videoPosition,
+                onCueSelected: (cue) => selectCue(cue),
+              });
             };
             cueInsertCueAfterElement.onclick = () => {
-              const cueHere = captionData.cues.find(c => c.startTime <= videoPosition && videoPosition <= c.endTime);
+              const cueHere = captionData.cues.find(
+                (c) =>
+                  c.startTime <= videoPosition && videoPosition <= c.endTime
+              );
               const t = cueHere ? cueHere.endTime + cueMinSpace : videoPosition;
-              
+
               const cue = {
                 id: "",
                 text: "",
                 startTime: t,
-                endTime:  + newCueLength,
+                endTime: +newCueLength,
                 style: TextSTyle.NONE,
                 align: "",
               };
               captionData.cues.push(cue);
               captionData.cues.sort((a, b) => a.startTime - b.startTime);
               selectCue(cue);
-              renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+              renderCueTable(cuesElement, captionData.cues, {
+                time: videoPosition,
+                onCueSelected: (cue) => selectCue(cue),
+              });
             };
-
 
             const selectCue = (cue: Cue | null) => {
               if (cue == null) {
@@ -532,12 +686,15 @@ async function register ({
               cueInputElement.onkeyup = () => {
                 cue.text = cueInputElement.value;
                 captionData.changed = true;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
                 renderLanguageSelector(
                   languageListElement,
                   captionList,
                   currentCaptionLanguageId,
-                  selectLanguage,
+                  selectLanguage
                 );
                 // vttResultElement.innerText = generateVTT(cues);
               };
@@ -545,33 +702,42 @@ async function register ({
               cueSetStartElement.onclick = () => {
                 cue.startTime = videoPosition;
                 captionData.changed = true;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
                 renderLanguageSelector(
                   languageListElement,
                   captionList,
                   currentCaptionLanguageId,
-                  selectLanguage,
+                  selectLanguage
                 );
                 // vttResultElement.innerText = generateVTT(cues);
               };
               cueSetEndElement.onclick = () => {
                 cue.endTime = videoPosition;
                 captionData.changed = true;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
                 renderLanguageSelector(
                   languageListElement,
                   captionList,
                   currentCaptionLanguageId,
-                  selectLanguage,
+                  selectLanguage
                 );
                 // vttResultElement.innerText = generateVTT(cues);
               };
 
               deleteCueElement.onclick = () => {
-                captionData.cues = captionData.cues.filter(c => c != cue);
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+                captionData.cues = captionData.cues.filter((c) => c != cue);
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
                 selectCue(null);
-              }
+              };
 
               cueInsertCueAfterSelectedElement.onclick = () => {
                 const cue2 = {
@@ -585,71 +751,122 @@ async function register ({
                 captionData.cues.push(cue2);
                 captionData.cues.sort((a, b) => a.startTime - b.startTime);
                 selectCue(cue2);
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
-              }
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
+              };
 
               cueStyleItalicElement.onclick = () => {
-                cue.style = cue.style != TextSTyle.ITALIC ? TextSTyle.ITALIC : TextSTyle.NONE;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
-                currentCues = captionData.cues.filter(cue => cue.startTime < videoPosition && videoPosition < cue.endTime);
+                cue.style =
+                  cue.style != TextSTyle.ITALIC
+                    ? TextSTyle.ITALIC
+                    : TextSTyle.NONE;
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
+                currentCues = captionData.cues.filter(
+                  (cue) =>
+                    cue.startTime < videoPosition && videoPosition < cue.endTime
+                );
                 renderPreview(previewElement, currentCues);
               };
               cueStyleBoldElement.onclick = () => {
-                cue.style = cue.style != TextSTyle.BOLD ? TextSTyle.BOLD : TextSTyle.NONE;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
-                currentCues = captionData.cues.filter(cue => cue.startTime < videoPosition && videoPosition < cue.endTime);
+                cue.style =
+                  cue.style != TextSTyle.BOLD ? TextSTyle.BOLD : TextSTyle.NONE;
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
+                currentCues = captionData.cues.filter(
+                  (cue) =>
+                    cue.startTime < videoPosition && videoPosition < cue.endTime
+                );
                 renderPreview(previewElement, currentCues);
-                
               };
               cueStyleUnderlineElement.onclick = () => {
-                cue.style = cue.style != TextSTyle.UNDERLINE ? TextSTyle.UNDERLINE : TextSTyle.NONE;
-                renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
-                currentCues = captionData.cues.filter(cue => cue.startTime < videoPosition && videoPosition < cue.endTime);
+                cue.style =
+                  cue.style != TextSTyle.UNDERLINE
+                    ? TextSTyle.UNDERLINE
+                    : TextSTyle.NONE;
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: videoPosition,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
+                currentCues = captionData.cues.filter(
+                  (cue) =>
+                    cue.startTime < videoPosition && videoPosition < cue.endTime
+                );
                 renderPreview(previewElement, currentCues);
-                
               };
 
-              renderCueTable(cuesElement, captionData.cues, { time: videoPosition, onCueSelected: (cue => selectCue(cue)) });
+              renderCueTable(cuesElement, captionData.cues, {
+                time: videoPosition,
+                onCueSelected: (cue) => selectCue(cue),
+              });
             };
             selectCue(null);
 
             if (playerStatusCallback) {
-              player.removeEventListener("playbackStatusUpdate", playerStatusCallback);
+              player.removeEventListener(
+                "playbackStatusUpdate",
+                playerStatusCallback
+              );
             }
             if (playerStatusChangeCallback) {
-              player.removeEventListener("playbackStatusChange", playerStatusChangeCallback);
+              player.removeEventListener(
+                "playbackStatusChange",
+                playerStatusChangeCallback
+              );
             }
-            playerStatusCallback = ({ position, playbackState, duration }: { position: number, playbackState: string, duration: string }) => {
+            playerStatusCallback = ({
+              position,
+              playbackState,
+              duration,
+            }: {
+              position: number;
+              playbackState: string;
+              duration: string;
+            }) => {
               if (position != videoPosition) {
                 videoPosition = position;
                 videoIsPlaying = playbackState == "playing";
 
                 timestampElement.innerText = formatTime(position);
 
-                renderCueTable(cuesElement, captionData.cues, { time: position, onCueSelected: (cue => selectCue(cue)) });
+                renderCueTable(cuesElement, captionData.cues, {
+                  time: position,
+                  onCueSelected: (cue) => selectCue(cue),
+                });
               }
             };
-            playerStatusChangeCallback = (playbackState: string) => videoIsPlaying = playbackState == "playing"
+            playerStatusChangeCallback = (playbackState: string) =>
+              (videoIsPlaying = playbackState == "playing");
             player.addEventListener(
               "playbackStatusUpdate",
               playerStatusCallback
             );
             player.addEventListener(
               "playbackStatusChange",
-              playerStatusChangeCallback,
-            )
+              playerStatusChangeCallback
+            );
 
             saveCurrentLanguageElement.onclick = async () => {
               if (currentCaptionLanguageId) {
                 let formData = new FormData();
-                formData.append('captionfile', new Blob(generateVTT(captionData.cues).split("")), currentCaptionLanguageId + ".vtt");
+                formData.append(
+                  "captionfile",
+                  new Blob(generateVTT(captionData.cues).split("")),
+                  currentCaptionLanguageId + ".vtt"
+                );
                 const res = await fetch(
                   `/api/v1/videos/${parameters.id}/captions/${currentCaptionLanguageId}`,
                   {
                     method: "PUT",
                     body: formData,
                     ...fetchCredentials,
-                  } as any,
+                  } as any
                 );
                 if (res.status == 204) {
                   captionData.changed = false;
@@ -657,25 +874,32 @@ async function register ({
                     languageListElement,
                     captionList,
                     currentCaptionLanguageId,
-                    selectLanguage,
+                    selectLanguage
                   );
                 }
                 // /lazy-static/video-captions/8569c190-8405-4e0e-a89e-fec0c0377f75-da.vtt
               }
             };
 
-            let mouseDown: { x: number, y: number, box?: TimelineClickBox } | null = null;
+            let mouseDown: {
+              x: number;
+              y: number;
+              box?: TimelineClickBox;
+            } | null = null;
             let lastTimelineRender = 0;
             let lastTimelineVideoPosition = 0;
             let lastX: null | number = null;
             let currentCues: Cue[] = [];
             const updateTimeline = (t: number) => {
               if (videoIsPlaying) {
-                videoPosition += (t-lastTimelineRender)/1000;
+                videoPosition += (t - lastTimelineRender) / 1000;
                 timestampElement.innerText = formatTime(videoPosition);
               }
               if (videoPosition != lastTimelineVideoPosition) {
-                currentCues = captionData.cues.filter(cue => cue.startTime < videoPosition && videoPosition < cue.endTime);
+                currentCues = captionData.cues.filter(
+                  (cue) =>
+                    cue.startTime < videoPosition && videoPosition < cue.endTime
+                );
                 renderPreview(previewElement, currentCues);
               }
 
@@ -699,35 +923,34 @@ async function register ({
                   height,
                   styles,
                   audioBarsInterval,
-                  audioBars,
+                  audioBars
                 );
 
                 const getBoxAtPosition = (e: MouseEvent) => {
                   const rect = (e as any).target.getBoundingClientRect();
                   const x = e.clientX - rect.left;
                   const y = e.clientY - rect.top;
-                  return boxes.find(box => {
+                  return boxes.find((box) => {
                     if (box.x1 < x && x < box.x2 && box.y1 < y && y < box.y2) {
                       return true;
                     }
-    
+
                     return false;
                   });
-                }
+                };
 
                 timelineElement.onmousemove = (e) => {
                   let deltaX = e.screenX - (lastX || e.screenX);
                   lastX = e.screenX;
                   const box = getBoxAtPosition(e);
                   if (box) {
-                    if (box.type == 'cue') {
+                    if (box.type == "cue") {
                       timelineElement.style.cursor = "pointer";
                       timelineElement.onclick = () => selectCue(box.cue);
                     }
                     if (box.type == "cueStart") {
                       timelineElement.style.cursor = "ew-resize";
                       timelineElement.onclick = () => {};
-                      
                     }
                     if (box.type == "cueEnd") {
                       timelineElement.style.cursor = "ew-resize";
@@ -740,16 +963,17 @@ async function register ({
 
                   if (mouseDown) {
                     if (mouseDown?.box?.type == "cueEnd") {
-                      const newTime = mouseDown.box.cue.endTime + deltaX/timelineSecondLength;
+                      const newTime =
+                        mouseDown.box.cue.endTime +
+                        deltaX / timelineSecondLength;
                       if (
-                        mouseDown.box.cue.startTime < newTime && 
-                        (
-                          cueMinSpace == 0 ||
-                          !captionData.cues.find(other =>
-                            other.startTime - cueMinSpace < newTime &&
-                            other.startTime > newTime - cueMinSpace
-                          )
-                        )
+                        mouseDown.box.cue.startTime < newTime &&
+                        (cueMinSpace == 0 ||
+                          !captionData.cues.find(
+                            (other) =>
+                              other.startTime - cueMinSpace < newTime &&
+                              other.startTime > newTime - cueMinSpace
+                          ))
                       ) {
                         mouseDown.box.cue.endTime = newTime;
                         if (!captionData.changed) {
@@ -758,21 +982,22 @@ async function register ({
                             languageListElement,
                             captionList,
                             currentCaptionLanguageId,
-                            selectLanguage,
+                            selectLanguage
                           );
                         }
                       }
                     } else if (mouseDown?.box?.type == "cueStart") {
-                      const newTime = mouseDown.box.cue.startTime + deltaX/timelineSecondLength;
+                      const newTime =
+                        mouseDown.box.cue.startTime +
+                        deltaX / timelineSecondLength;
                       if (
                         newTime < mouseDown?.box?.cue.endTime &&
-                        (
-                          cueMinSpace == 0 ||
-                          !captionData.cues.find(other =>
-                            other.endTime - cueMinSpace < newTime &&
-                            other.endTime > newTime - cueMinSpace
-                          )
-                        )
+                        (cueMinSpace == 0 ||
+                          !captionData.cues.find(
+                            (other) =>
+                              other.endTime - cueMinSpace < newTime &&
+                              other.endTime > newTime - cueMinSpace
+                          ))
                       ) {
                         mouseDown.box.cue.startTime = newTime;
                         if (!captionData.changed) {
@@ -781,17 +1006,17 @@ async function register ({
                             languageListElement,
                             captionList,
                             currentCaptionLanguageId,
-                            selectLanguage,
+                            selectLanguage
                           );
                         }
                       }
-                    } else if(!mouseDown.box) {
-                      videoPosition -= deltaX/timelineSecondLength;
+                    } else if (!mouseDown.box) {
+                      videoPosition -= deltaX / timelineSecondLength;
                       player.seek(videoPosition);
                       timestampElement.innerText = formatTime(videoPosition);
                     }
                   }
-                }
+                };
                 timelineElement.onmousedown = (e) => {
                   const rect = (e as any).target.getBoundingClientRect();
                   const x = e.clientX - rect.left;
@@ -807,13 +1032,18 @@ async function register ({
               lastTimelineRender = t;
               lastTimelineVideoPosition = videoPosition;
 
-              if (currentCaptionLanguageId == languageId && originalHref == location.href) {
+              if (
+                currentCaptionLanguageId == languageId &&
+                originalHref == location.href
+              ) {
                 requestAnimationFrame(updateTimeline);
               }
             };
             requestAnimationFrame(updateTimeline);
 
-            renderCueTable(cuesElement, captionData.cues, { onCueSelected: (cue => selectCue(cue)) });
+            renderCueTable(cuesElement, captionData.cues, {
+              onCueSelected: (cue) => selectCue(cue),
+            });
             // vttResultElement.innerText = generateVTT(cues);
           };
 
@@ -821,138 +1051,101 @@ async function register ({
             currentCaptionLanguageId = captions.data[0].language.id;
             selectLanguage(currentCaptionLanguageId);
           }
-          
+
           renderLanguageSelector(
             languageListElement,
             captionList,
             currentCaptionLanguageId,
-            selectLanguage,
+            selectLanguage
           );
 
           renderLanguageList(
             addNewLanguageListElement,
             Object.keys(languages)
-              .map(id => ({ id, label: languages[id], disabled: captionList.findIndex(c => c.id == id) != -1 }))
+              .map((id) => ({
+                id,
+                label: languages[id],
+                disabled: captionList.findIndex((c) => c.id == id) != -1,
+              }))
               .sort((a, b) => a.label.localeCompare(b.label)),
-              currentCaptionLanguageId, 
-              languagePairs
+            currentCaptionLanguageId,
+            languagePairs
           );
 
-
-          // periodically GET /check-translation to check if a translation is available
+          // periodically GET /check-caption-data to check if a translation is available
           const checkTranslation = async () => {
-            if(location.pathname != '/p/subtitles') {
+            if (location.pathname != "/p/subtitles") {
               return;
             }
-            
-            if(captionList.length == 0) {
-              transcriptionPopupElement.style.display = "block";
-              languageListElement.style.display = "none";
+
+            if (waitingForTranscription) {
+              let captionsReq = await fetch(
+                `/api/v1/videos/${parameters.id}/captions`,
+                fetchCredentials
+              );
+
+              if (captionsReq.status !== 200) {
+                main.innerHTML = "can't find video with id " + parameters.id;
+                return;
+              }
+
+              const captions: { data: VideoCaption[] } =
+                await captionsReq.json();
+
+              captionList = await Promise.all(
+                captions.data.map(async (c) => ({
+                  id: c.language.id,
+                  label: c.language.label,
+                  changed: false,
+                  cues: (
+                    await getVTTDataFromUrl(c.captionPath)
+                  ).cues.map<Cue>((c) => {
+                    const text = getStyledText(c.text);
+                    return {
+                      id: c.id,
+                      startTime: c.startTime,
+                      endTime: c.endTime,
+                      text: text.text,
+                      align: c.align,
+                      style: text.style,
+                    };
+                  }),
+                }))
+              );
+
+              if (captionList.length > 0) {
+                waitingForTranscription = false;
+                window.location.reload();
+              }
             }
 
-            if(!translationready_discard) {
-              const res = await fetch("/plugins/subtitle-translator/router/check-translation?id=" + parameters.id, fetchCredentials);
+            if (captionList.length == 0) {
+              transcriptionPopupElement.style.display = "block";
+              languageListElement.style.display = "none";
+              waitingForTranscription = true;
+            }
 
-              res.json().then(async (result : any) => {
-                if(result.status == 'none') {
-                  // console.log("No translation available & no translation pending");
-                }else if(result.status == 'pending') {
-                  // console.log("Translation is pending");
-  
-                  if(captionList.findIndex(c => c.id == '11') == -1){
+            const res = await fetch(
+              "/plugins/subtitle-translator/router/check-caption-data?id=" +
+                parameters.id,
+              fetchCredentials
+            );
 
-                    // console.log("Adding translation pending language");
-                    captionList.unshift({
-                      id: '11',
-                      label: 'Translation pending.',
-                      changed: false,
-                      cues: []
-                    });
-                  
-                    renderLanguageSelector(
-                      languageListElement,
-                      captionList,
-                      currentCaptionLanguageId,
-                      selectLanguage
-                    );
-                  }
-                 
-                }else if(result.status == 'done') {
-                  if(!translationready_discard) {
-                    // console.log("Translation is ready");
-                    let label = languages[result.targetLanguage];
-                    translationready_srt = result.srt;
-                    translationready_targetLanguage = result.targetLanguage;
+            res.json().then(async (result: any) => {
+              if (result.status == "none") {
+                // console.log("No translation available & no translation pending");
+              } else if (result.status == "pending") {
+                // console.log("Translation is pending");
 
+                if (captionList.findIndex((c) => c.id == "11") == -1) {
+                  // console.log("Adding translation pending language");
+                  captionList.unshift({
+                    id: "11",
+                    label: "Translation pending.",
+                    changed: false,
+                    cues: [],
+                  });
 
-                    if (translationready_srt != '')
-                    {
-                      // console.log("Saving translation");
-                      let formdata = new FormData();
-                      formdata.append('captionfile', new Blob([translationready_srt], {type: 'text/plain'}), translationready_targetLanguage + ".srt");
-                      const res = await fetch(`/api/v1/videos/${parameters.id}/captions/${translationready_targetLanguage}`, {
-                        method: 'PUT',
-                        body: formdata,
-                        ...fetchCredentials,
-                      } as any);
-        
-        
-                      if (res.status == 204) {
-                        peertubeHelpers.notifier.success( "Your translation to " + label + " is ready.", "Translation ready", 5000);
-                        addTranslateLanguageElement.disabled = false;
-                        //remove translation pending language
-                        captionList = captionList.filter(e => e.id != '11');
-
-                        // add the new language
-                        const [
-                          videoDataRequest,
-                          captionsRequest,
-                          languagesRequest,
-                          languagesPairRequest
-                        ] = await Promise.all([
-                          fetch(`/api/v1/videos/${parameters.id}`, fetchCredentials),
-                          fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials),
-                          fetch("/api/v1/videos/languages", fetchCredentials),
-                          fetch('/plugins/subtitle-translator/router/available-pairs', fetchCredentials)
-                        ]);
-
-                        if (captionsRequest.status !== 200 || videoDataRequest.status !== 200) {
-                          main.innerHTML = "can't find video with id " + parameters.id;
-                          return;
-                        }
-
-                        const captions: { data: VideoCaption[] } = await captionsRequest.json();
-                        languagePairs = await languagesPairRequest.json();
-                        languages = await languagesRequest.json();
-                        
-                        captionList = await Promise.all(captions.data.map(async c => ({
-                          id: c.language.id,
-                          label: c.language.label,
-                          changed: false,
-                          cues: (await getVTTDataFromUrl(c.captionPath)).cues.map<Cue>(c => {
-                            const text = getStyledText(c.text);
-                            return {
-                              id: c.id,
-                              startTime: c.startTime,
-                              endTime: c.endTime,
-                              text: text.text,
-                              align: c.align,
-                              style: text.style,
-                            };
-                          }),
-                        })));
-                        selectLanguage(currentCaptionLanguageId);
-                        
-                        
-                      } 
-                    }
-
-                  }
-                  
-                } else if(result.status == 'aborted'){
-                  peertubeHelpers.notifier.error("Translation aborted", "Error", 5000);
-                  addTranslateLanguageElement.disabled = false;
-                  captionList = captionList.filter(e => e.id != '11');
                   renderLanguageSelector(
                     languageListElement,
                     captionList,
@@ -960,49 +1153,152 @@ async function register ({
                     selectLanguage
                   );
                 }
-              });
-            }
-           
+              } else if (result.status == "done") {
+                // console.log("Translation is ready");
+                let label = languages[result.targetLanguage];
+                translationready_srt = result.srt;
+                translationready_targetLanguage = result.targetLanguage;
 
+                if (translationready_srt != "") {
+                  // console.log("Saving translation");
+                  let formdata = new FormData();
+                  formdata.append(
+                    "captionfile",
+                    new Blob([translationready_srt], { type: "text/plain" }),
+                    translationready_targetLanguage + ".srt"
+                  );
+                  const res = await fetch(
+                    `/api/v1/videos/${parameters.id}/captions/${translationready_targetLanguage}`,
+                    {
+                      method: "PUT",
+                      body: formdata,
+                      ...fetchCredentials,
+                    } as any
+                  );
+
+                  if (res.status == 204) {
+                    peertubeHelpers.notifier.success(
+                      "Your translation to " + label + " is ready.",
+                      "Translation ready",
+                      5000
+                    );
+                    addTranslateLanguageElement.disabled = false;
+                    //remove translation pending language
+                    captionList = captionList.filter((e) => e.id != "11");
+
+                    // add the new language
+                    const [
+                      videoDataRequest,
+                      captionsRequest,
+                      languagesRequest,
+                      languagesPairRequest,
+                    ] = await Promise.all([
+                      fetch(
+                        `/api/v1/videos/${parameters.id}`,
+                        fetchCredentials
+                      ),
+                      fetch(
+                        `/api/v1/videos/${parameters.id}/captions`,
+                        fetchCredentials
+                      ),
+                      fetch("/api/v1/videos/languages", fetchCredentials),
+                      fetch(
+                        "/plugins/subtitle-translator/router/available-pairs",
+                        fetchCredentials
+                      ),
+                    ]);
+
+                    if (
+                      captionsRequest.status !== 200 ||
+                      videoDataRequest.status !== 200
+                    ) {
+                      main.innerHTML =
+                        "can't find video with id " + parameters.id;
+                      return;
+                    }
+
+                    const captions: { data: VideoCaption[] } =
+                      await captionsRequest.json();
+                    languagePairs = await languagesPairRequest.json();
+                    languages = await languagesRequest.json();
+
+                    captionList = await Promise.all(
+                      captions.data.map(async (c) => ({
+                        id: c.language.id,
+                        label: c.language.label,
+                        changed: false,
+                        cues: (
+                          await getVTTDataFromUrl(c.captionPath)
+                        ).cues.map<Cue>((c) => {
+                          const text = getStyledText(c.text);
+                          return {
+                            id: c.id,
+                            startTime: c.startTime,
+                            endTime: c.endTime,
+                            text: text.text,
+                            align: c.align,
+                            style: text.style,
+                          };
+                        }),
+                      }))
+                    );
+                    selectLanguage(currentCaptionLanguageId);
+                  }
+                }
+              } else if (result.status == "aborted") {
+                peertubeHelpers.notifier.error(
+                  "Translation aborted",
+                  "Error",
+                  5000
+                );
+                addTranslateLanguageElement.disabled = false;
+                captionList = captionList.filter((e) => e.id != "11");
+                renderLanguageSelector(
+                  languageListElement,
+                  captionList,
+                  currentCaptionLanguageId,
+                  selectLanguage
+                );
+              }
+            });
           };
-          setInterval(checkTranslation, 15*1000);
+          setInterval(checkTranslation, 15 * 1000);
           checkTranslation();
-
 
           addTranslateLanguageElement.onclick = async () => {
             const videoId = parameters.id;
             const originalLanguage = currentCaptionLanguageId;
             const targetLanguage = addNewLanguageListElement.value;
 
+            const res = await fetch(
+              "/plugins/subtitle-translator/router/check-caption-data?id=" +
+                parameters.id,
+              fetchCredentials
+            );
 
-
-            const res = await fetch("/plugins/subtitle-translator/router/check-translation?id=" + parameters.id, fetchCredentials);
-
-            res.json().then(async (result : any) => {
-              // console.log("checking translation before starting another", JSON.stringify(result));
-              if(result.status == 'none') {
-
+            res.json().then(async (result: any) => {
+              if (result.status == "none") {
                 if (originalLanguage == targetLanguage) {
                   alert("Can't translate to the same language");
                   return;
                 }
 
-                if(videoId && originalLanguage && targetLanguage) {
+                if (videoId && originalLanguage && targetLanguage) {
+                  let response = await fetch(
+                    `/api/v1/videos/${parameters.id}/captions`,
+                    fetchCredentials
+                  );
 
-
-                  // console.log("Fetching captions");
-                  let response = await fetch(`/api/v1/videos/${parameters.id}/captions`, fetchCredentials);
-
-                  const captions : any = await response.json();
-
-                  // console.log("Got captions" + JSON.stringify(captions));
-
+                  const captions: any = await response.json();
 
                   // Check if the video has the captions in the original language
                   let path = "";
                   let found = false;
                   captions.data.forEach(
-                    (element: { language: { id: string }; captionPath: string }) => {
+                    (element: {
+                      language: { id: string };
+                      captionPath: string;
+                    }) => {
                       // console.log("Checking language: " + element.language.id);
                       if (element.language.id === originalLanguage) {
                         path = element.captionPath;
@@ -1016,48 +1312,48 @@ async function register ({
                     return;
                   }
 
+                  fetch(path, fetchCredentials)
+                    .then((d) => d.text())
+                    .then(async (data) => {
+                      let subtitleTranslationRequest = await fetch(
+                        `/plugins/subtitle-translator/router/translate?id=${videoId}`,
+                        {
+                          method: "POST",
+                          body: JSON.stringify({
+                            originalLanguage: originalLanguage,
+                            targetLanguage: targetLanguage,
+                            captions: data,
+                          }),
+                          headers: {
+                            Accept: "application/json",
+                            "Content-Type": "application/json",
+                            ...fetchCredentials.headers,
+                          },
+                        }
+                      );
 
-                  fetch(path, fetchCredentials).then(d => d.text()).then(async (data) => {
+                      await subtitleTranslationRequest.json();
 
-                    let subtitleTranslationRequest = await fetch(`/plugins/subtitle-translator/router/translate?id=${videoId}`, {
-                      method: 'POST',
-                      body: JSON.stringify({
-                        originalLanguage: originalLanguage,
-                        targetLanguage: targetLanguage,
-                        captions: data,
-                      }),
-                      headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        ...fetchCredentials.headers,
-                      },
+                      addTranslateLanguageElement.disabled = true;
+
+                      captionList.unshift({
+                        id: "11",
+                        label: "Translation pending.",
+                        changed: false,
+                        cues: [],
+                      });
+
+                      renderLanguageSelector(
+                        languageListElement,
+                        captionList,
+                        currentCaptionLanguageId,
+                        selectLanguage
+                      );
                     });
-      
-                    await subtitleTranslationRequest.json();
-      
-                    addTranslateLanguageElement.disabled = true;
-
-                    captionList.unshift({
-                      id: '11',
-                      label: 'Translation pending.',
-                      changed: false,
-                      cues: []
-                    });
-      
-                    renderLanguageSelector(
-                      languageListElement,
-                      captionList,
-                      currentCaptionLanguageId,
-                      selectLanguage
-                    );
-                  });
-
                 }
-
               }
             });
-
-          }
+          };
 
           deleteCurrentLanguageElement.onclick = () => {
             if (currentCaptionLanguageId) {
@@ -1070,13 +1366,18 @@ async function register ({
                 confirm: {
                   value: "Delete",
                   action: async () => {
-                    const res = await fetch(`/api/v1/videos/${parameters.id}/captions/${currentCaptionLanguageId}`, {
-                      method: "DELETE",
-                      ...fetchCredentials,
-                    });
-                    
+                    const res = await fetch(
+                      `/api/v1/videos/${parameters.id}/captions/${currentCaptionLanguageId}`,
+                      {
+                        method: "DELETE",
+                        ...fetchCredentials,
+                      }
+                    );
+
                     if (res.status == 204) {
-                      captionList = captionList.filter(e => e.id != currentCaptionLanguageId);
+                      captionList = captionList.filter(
+                        (e) => e.id != currentCaptionLanguageId
+                      );
                       if (captionList.length != 0) {
                         selectLanguage(captionList[0].id);
                       } else {
@@ -1091,24 +1392,25 @@ async function register ({
             }
           };
         } else {
-          main.innerHTML = 'no video id'
+          main.innerHTML = "no video id";
         }
       }
-    }
-  })
+    },
+  });
 }
 
 const getStyledText = (htmlText: string) => {
   let style: TextSTyle = TextSTyle.NONE;
-  if (htmlText.startsWith("<b>") && htmlText.endsWith("</b>")) style = TextSTyle.BOLD;
-  if (htmlText.startsWith("<i>") && htmlText.endsWith("</i>")) style = TextSTyle.ITALIC;
-  if (htmlText.startsWith("<u>") && htmlText.endsWith("</u>")) style = TextSTyle.UNDERLINE;
+  if (htmlText.startsWith("<b>") && htmlText.endsWith("</b>"))
+    style = TextSTyle.BOLD;
+  if (htmlText.startsWith("<i>") && htmlText.endsWith("</i>"))
+    style = TextSTyle.ITALIC;
+  if (htmlText.startsWith("<u>") && htmlText.endsWith("</u>"))
+    style = TextSTyle.UNDERLINE;
   if (style != TextSTyle.NONE) {
-    return { text: htmlText.slice(3, -4), style};
+    return { text: htmlText.slice(3, -4), style };
   }
   return { text: htmlText, style };
 };
 
-export {
-  register
-}
+export { register };

@@ -1,4 +1,6 @@
-# PeerTube Subtitle Editor
+# PeerTube Subtitle Editor & Translator
+
+This is is a fork of the [Subtitle Editor Plugin](https://codeberg.org/herover/peertube-plugin-subtitle-editor/) for Peertube. It adds the ability to translate subtitles to a new language using the [Subtitle-Translator](https://github.com/tdhm/subtitles-translator/) project which uses OPUS-MT models to translate subtitles files.
 
 Edit captions directly in PeerTube! Installing this plugin will add a button to your PeerTube instances video settings (the page you see when you publish or update a video) that will take you to the following screen:
 

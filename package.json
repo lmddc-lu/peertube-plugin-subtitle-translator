@@ -1,7 +1,7 @@
 {
   "name": "peertube-plugin-subtitle-translator",
   "description": "Basic subtitle editor that supports editing and managing captions for multiple languages directly in PeerTube.",
-  "version": "2.9.4",
+  "version": "3.0.0",
   "license": "AGPL-3.0",
   "author": {
     "name": "Herover",
