@@ -22,7 +22,7 @@ in the .env file, you can set the following variables:
 
 - `USE_GPU` : Set to `true` if you want to use the GPU version of the image. Set to `false` if you want to use the CPU version.
 
-For the GPU version, you will need to have a GPU with CUDA support. You can build the image with the following command:
+For the GPU version, you will need to have a GPU with CUDA support.
 Make sure you have the NVIDIA container toolkit installed on your machine. You can find the installation instructions [here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
 
 - `API_PORT` : The port on which the API will be available. Default is 5000.
