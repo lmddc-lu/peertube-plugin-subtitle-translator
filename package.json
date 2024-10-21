@@ -1,12 +1,19 @@
 {
   "name": "peertube-plugin-subtitle-translator",
-  "description": "Basic subtitle editor that supports editing and managing captions for multiple languages directly in PeerTube.",
+  "description": "Basic subtitle editor that supports editing, translating and managing captions for multiple languages directly in PeerTube.",
   "version": "3.0.0",
   "license": "AGPL-3.0",
   "author": {
     "name": "Herover",
     "url": "https://leonora.app"
   },
+  "contributors": [
+    {
+      "name": "LMDDC",
+      "url": "https://lmddc.lu",
+      "email": "foss@lmddc.lu"
+    }
+  ],
   "bugs": "https://codeberg.org/herover/peertube-plugin-subtitle-editor/issues",
   "clientScripts": [
     {
