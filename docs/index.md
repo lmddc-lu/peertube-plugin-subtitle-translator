@@ -1,7 +1,7 @@
 # Peertube plugin Subtitle Translator
 
 
-This is is a fork of the [Subtitle Editor Plugin](https://codeberg.org/herover/peertube-plugin-subtitle-editor/) for Peertube. It adds the ability to translate subtitles to a new language using the [Subtitle-Translator](https://github.com/tdhm/subtitles-translator/) project which uses OPUS-MT models to translate subtitles files.
+This is is a fork of the [Subtitle Editor Plugin](https://codeberg.org/herover/peertube-plugin-subtitle-editor/) for Peertube. It adds the ability to automatically translate subtitles to a new language using the [Subtitle-Translator](https://github.com/tdhm/subtitles-translator/) project which uses OPUS-MT models to translate subtitles files.
 
 ## Quick start
 
@@ -14,21 +14,27 @@ For now the API server is not published, so you will have to build it yourself. 
 First, clone the repository and build the image:
 
 ```bash
-git clone 
+git clone https://github.com/lmddc-lu/peertube-plugin-subtitle-translator --recurse-submodules
 cd subtitle_translator_api
 ```
-For the CPU version:
-```bash
-make run
-``` 
-This command will build the image and run the container. The API will be available at `http://your-server-ip:5000`.
+
+in the .env file, you can set the following variables:
+
+- `USE_GPU` : Set to `true` if you want to use the GPU version of the image. Set to `false` if you want to use the CPU version.
 
 For the GPU version, you will need to have a GPU with CUDA support. You can build the image with the following command:
 Make sure you have the NVIDIA container toolkit installed on your machine. You can find the installation instructions [here](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
-```bash
-make run-gpu
-```
 
+- `API_PORT` : The port on which the API will be available. Default is 5000.
+
+You then need to build our fork of the subtitle-translator project.
+
+
+Then, you can build the image with the following command:
+
+```bash
+make run
+```
 
 ### Peertube Plugin
 
