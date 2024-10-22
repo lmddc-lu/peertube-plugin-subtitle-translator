@@ -14,8 +14,8 @@ For now the API server is not published, so you will have to build it yourself. 
 First, clone the repository and build the image:
 
 ```bash
-git clone https://github.com/lmddc-lu/peertube-plugin-subtitle-translator --recurse-submodules
-cd subtitle_translator_api
+git clone https://github.com/lmddc-lu/peertube-plugin-subtitle-translator-api.git --recurse-submodules
+cd peertube-plugin-subtitle-translator-api/
 ```
 
 in the .env file, you can set the following variables:
@@ -27,10 +27,17 @@ Make sure you have the NVIDIA container toolkit installed on your machine. You c
 
 - `API_PORT` : The port on which the API will be available. Default is 5000.
 
-You then need to build our fork of the subtitle-translator project.
+You then need to build our fork of the subtitle-translator project, which is a submodule of this repository.
+Ensure you have python (>= 3.8, < 3.11) installed, and poetry installed.
+You can build the submodule with the following command:
+```bash
+make build-subtitle-translator
+```
+
+This will create a .whl file in the `dist/` directory. This file will be used to install the subtitle-translator package in the API server.
 
 
-Then, you can build the image with the following command:
+Then, you can build and run the subtitle-translator-api image with the following command:
 
 ```bash
 make run
@@ -41,6 +48,8 @@ make run
 To get started, you can clone this repository in a directory accessible by your PeerTube instance. Then, you can install the dependencies and build the plugin with the following commands:
 
 ```bash
+git clone https://github.com/lmddc-lu/peertube-plugin-subtitle-translator.git
+cd peertube-plugin-subtitle-translator/
 npm install
 npm run build
 ```
