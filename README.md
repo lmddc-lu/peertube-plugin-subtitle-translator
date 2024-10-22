@@ -4,7 +4,7 @@ This is is a fork of the [Subtitle Editor Plugin](https://codeberg.org/herover/p
 
 ## Installation
 
-The installation instructions in the documentation at [Peertube Plugin Subtitle Translator](https://documentation.skilltech.tools/peertube-subtitle-translator-plugin-documentation/).
+The installation instructions are in the documentation at [Peertube Plugin Subtitle Translator](https://documentation.skilltech.tools/peertube-subtitle-translator-plugin-documentation/). 
 
 ## Original README
 
