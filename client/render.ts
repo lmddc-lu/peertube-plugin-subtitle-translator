@@ -91,17 +91,17 @@ export const renderBasics = (parent: Element) => {
 
 export const renderLanguageSelector = (
   element: HTMLDivElement,
-  languages: { id: string, label: string, changed: boolean }[],
+  languages: { id: string; label: string; changed: boolean }[],
   currentLangId: string,
-  onSelected: (id: string) => any,
+  onSelected: (id: string) => any
 ) => {
   element.innerHTML = "";
 
   languages.forEach((lang) => {
-    if(lang.id!="11"){
+    if (lang.id != "11" && lang.id != "-236") {
       const btn = document.createElement("button");
       btn.classList.add("btn");
-      btn.classList.add((lang.id == currentLangId) ? "btn-dark" : "btn-light");
+      btn.classList.add(lang.id == currentLangId ? "btn-dark" : "btn-light");
       btn.innerText = lang.label;
       if (lang.changed) {
         btn.innerText += " (unsaved)";
@@ -109,7 +109,7 @@ export const renderLanguageSelector = (
       btn.onclick = () => onSelected(lang.id);
       element.appendChild(btn);
       element.appendChild(document.createTextNode(" "));
-    }else{
+    } else if (lang.id == "11") {
       // pending subtitle, not available for selection
       const btn = document.createElement("button");
       const loader = document.createElement("span");
@@ -122,75 +122,94 @@ export const renderLanguageSelector = (
       btn.appendChild(loader);
       element.appendChild(btn);
       element.appendChild(document.createTextNode(" "));
+    } else if (lang.id == "-236") {
+      // pending subtitle, not available for selection
+      const btn = document.createElement("button");
+      const loader = document.createElement("span");
+      loader.classList.add("loader");
+      btn.classList.add("btn");
+      btn.classList.add("btn-light");
+
+      btn.innerText = lang.label + " (refresh)";
+      btn.disabled = false;
+      btn.onclick = () => window.location.reload();
+      element.appendChild(btn);
+      element.appendChild(document.createTextNode(" "));
     }
   });
 };
 
 export const renderPreview = (element: HTMLDivElement, cues: Cue[]) => {
   element.innerHTML = "";
-  cues.forEach(cue => {
+  cues.forEach((cue) => {
     const span = document.createElement("span");
     span.innerText = cue.text;
     if (cue.style == TextStyle.BOLD) {
-      span.setAttribute("class", "subtitle-cue-bold")
+      span.setAttribute("class", "subtitle-cue-bold");
     } else if (cue.style == TextStyle.ITALIC) {
-      span.setAttribute("class", "subtitle-cue-italic")
+      span.setAttribute("class", "subtitle-cue-italic");
     } else if (cue.style == TextStyle.UNDERLINE) {
-      span.setAttribute("class", "subtitle-cue-underline")
+      span.setAttribute("class", "subtitle-cue-underline");
     }
     element.appendChild(span);
   });
-}
+};
 
-export const renderLanguageList = (element: HTMLSelectElement, languages: { id: string, label: string, disabled: boolean }[], currentCaptionLanguageId: string, languagesPair : string[][]) => {
+export const renderLanguageList = (
+  element: HTMLSelectElement,
+  languages: { id: string; label: string; disabled: boolean }[],
+  currentCaptionLanguageId: string,
+  languagesPair: string[][]
+) => {
   element.innerHTML = "";
   let count = 0;
-  if(currentCaptionLanguageId) {
+  if (currentCaptionLanguageId) {
     // console.log("currentCaptionLanguageId: " + currentCaptionLanguageId);
-    languagesPair.forEach(pair => {
+    languagesPair.forEach((pair) => {
       // console.log("pair[0]: " + pair[0] + " pair[1]: " + pair[1]);
-        languages.forEach(lang => {
-          if(pair[0] == currentCaptionLanguageId && pair[1] == lang.id) {
-            const opt = document.createElement("option");
-            opt.innerText = lang.label;
-            opt.value = lang.id;
-            if (lang.disabled) {
-              opt.setAttribute("disabled", "disabled");
-            } else {
-              count += 1;
-            }
-            element.appendChild(opt);
+      languages.forEach((lang) => {
+        if (pair[0] == currentCaptionLanguageId && pair[1] == lang.id) {
+          const opt = document.createElement("option");
+          opt.innerText = lang.label;
+          opt.value = lang.id;
+          if (lang.disabled) {
+            opt.setAttribute("disabled", "disabled");
+          } else {
+            count += 1;
           }
-        });
+          element.appendChild(opt);
+        }
+      });
     });
 
-    if(count == 0){
-
+    if (count == 0) {
       let actionzone = element.parentElement;
-      if(actionzone){
-        actionzone.style.display = 'none';
+      if (actionzone) {
+        actionzone.style.display = "none";
       }
     } else {
-
       let actionzone = element.parentElement;
-      if(actionzone){
-        actionzone.style.display = 'block';
+      if (actionzone) {
+        actionzone.style.display = "block";
       }
     }
-
   }
-
-}
+};
 
 interface RenderTableOpts {
   time?: number;
   onCueSelected?: (cue: Cue, i: number) => any;
-};
+}
 
-export const renderCueTable = (table: Element, cues: Cue[], opts: RenderTableOpts) => {
+export const renderCueTable = (
+  table: Element,
+  cues: Cue[],
+  opts: RenderTableOpts
+) => {
   table.innerHTML = "";
 
-  cues.map(e => e)
+  cues
+    .map((e) => e)
     .sort((a, b) => a.startTime - b.startTime)
     .forEach((cue, i) => {
       let isViewed = false;
@@ -200,7 +219,7 @@ export const renderCueTable = (table: Element, cues: Cue[], opts: RenderTableOpt
         }
       }
 
-      const row = document.createElement("tr")
+      const row = document.createElement("tr");
       if (isViewed) {
         row.setAttribute("class", "subtitle-cue-highlight");
       }
@@ -222,16 +241,16 @@ export const renderCueTable = (table: Element, cues: Cue[], opts: RenderTableOpt
       row.appendChild(e);
 
       e = document.createElement("td");
-      let text = document.createElement("span")
+      let text = document.createElement("span");
       text.innerText = cue.text;
       e.appendChild(text);
       row.appendChild(e);
       if (cue.style == TextStyle.BOLD) {
-        text.setAttribute("class", "subtitle-cue-bold")
+        text.setAttribute("class", "subtitle-cue-bold");
       } else if (cue.style == TextStyle.ITALIC) {
-        text.setAttribute("class", "subtitle-cue-italic")
+        text.setAttribute("class", "subtitle-cue-italic");
       } else if (cue.style == TextStyle.UNDERLINE) {
-        text.setAttribute("class", "subtitle-cue-underline")
+        text.setAttribute("class", "subtitle-cue-underline");
       }
 
       table.appendChild(row);
@@ -243,7 +262,7 @@ export const renderCueTable = (table: Element, cues: Cue[], opts: RenderTableOpt
 export const generateVTT = (cues: Cue[]) => {
   let result = "WEBVTT FILE\r\n\r\n";
 
-  cues.forEach(cue => {
+  cues.forEach((cue) => {
     if (cue.id) {
       result += cue.id + "\r\n";
     }
@@ -255,11 +274,11 @@ export const generateVTT = (cues: Cue[]) => {
     result += "\r\n";
 
     if (cue.style !== TextStyle.NONE) {
-      result += "<" + cue.style + ">"
+      result += "<" + cue.style + ">";
     }
     result += cue.text;
     if (cue.style !== TextStyle.NONE) {
-      result += "</" + cue.style + ">"
+      result += "</" + cue.style + ">";
     }
     result += "\r\n\r\n";
   });
@@ -268,13 +287,13 @@ export const generateVTT = (cues: Cue[]) => {
 };
 
 export interface TimelineClickBox {
-  type: "cue" | "cueStart" | "cueEnd",
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  cue: any,
-};
+  type: "cue" | "cueStart" | "cueEnd";
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  cue: any;
+}
 export const timelineSecondLength = 100;
 const timelineFont = "16px Arial";
 export const renderTimeline = (
@@ -285,12 +304,12 @@ export const renderTimeline = (
   width: number,
   height: number,
   styles: {
-    text: string,
-    box: string,
-    audioBars: string,
+    text: string;
+    box: string;
+    audioBars: string;
   },
   barsInterval: number,
-  bars?: Float32Array,
+  bars?: Float32Array
 ) => {
   const clickBoxes: TimelineClickBox[] = [];
   const dragRadius = 8;
@@ -306,13 +325,12 @@ export const renderTimeline = (
   ctx.moveTo(0, 0);
   ctx.clearRect(0, 0, width, height);
 
-
   ctx.beginPath();
   ctx.strokeStyle = styles.text;
   ctx.fillStyle = styles.text;
   for (let i = 0; i < duration * 10; i += 1) {
     let t = i / 10;
-    const p = Math.floor((t - time) * timelineSecondLength + (width / 2));
+    const p = Math.floor((t - time) * timelineSecondLength + width / 2);
     if (p < width && 0 < p) {
       ctx.moveTo(p, 20);
       ctx.lineTo(p, t % 1 == 0 ? 30 : 24);
@@ -321,11 +339,11 @@ export const renderTimeline = (
   ctx.stroke();
 
   for (let i = 0; i < duration; i++) {
-    const p = Math.floor((i - time) * timelineSecondLength + (width / 2));
+    const p = Math.floor((i - time) * timelineSecondLength + width / 2);
     if (p < width && 0 < p) {
       ctx.textAlign = "center";
       // ctx.moveTo(p, 0);
-      ctx.fillText("" + i % 60, p, 18);
+      ctx.fillText("" + (i % 60), p, 18);
     }
   }
 
@@ -335,31 +353,39 @@ export const renderTimeline = (
     ctx.fillStyle = styles.audioBars;
     ctx.moveTo(0, height);
     bars.forEach((bar, i) => {
-      const p1 = (i * barsInterval - time) * timelineSecondLength + (width / 2);
+      const p1 = (i * barsInterval - time) * timelineSecondLength + width / 2;
       if (-w < p1 && p1 < width) {
-        const h = bar*height/2;
-        ctx.lineTo(p1,height-h);
+        const h = (bar * height) / 2;
+        ctx.lineTo(p1, height - h);
       }
-    })
+    });
     ctx.lineTo(width, height);
     ctx.fill();
   }
 
   for (let i = 0; i < cues.length; i++) {
     const cue = cues[i];
-    const p1 = Math.floor((cue.startTime - time) * timelineSecondLength + (width / 2));
-    const p2 = Math.floor((cue.endTime - time) * timelineSecondLength + (width / 2));
+    const p1 = Math.floor(
+      (cue.startTime - time) * timelineSecondLength + width / 2
+    );
+    const p2 = Math.floor(
+      (cue.endTime - time) * timelineSecondLength + width / 2
+    );
 
-    let lane = lanes.findIndex(end => end < cue.startTime);
+    let lane = lanes.findIndex((end) => end < cue.startTime);
     if (lane == -1) {
       lane = lanes.length;
       lanes.push(cue.endTime);
     }
     lanes[lane] = cue.endTime;
 
-    if ((p1 < width && 0 < p1) || (p2 < width && 0 < p2) || (p1 < width / 2 && width / 2 < p2)) {
+    if (
+      (p1 < width && 0 < p1) ||
+      (p2 < width && 0 < p2) ||
+      (p1 < width / 2 && width / 2 < p2)
+    ) {
       ctx.fillStyle = styles.box;
-      const y = lane * (cueBoxHeight + 4) + cueY1
+      const y = lane * (cueBoxHeight + 4) + cueY1;
       ctx.fillRect(p1, y, p2 - p1, cueBoxHeight);
       // ctx.stroke();
       // ctx.fill();

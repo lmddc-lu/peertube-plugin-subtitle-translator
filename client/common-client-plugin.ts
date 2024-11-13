@@ -1185,63 +1185,14 @@ async function register({
                     addTranslateLanguageElement.disabled = false;
                     //remove translation pending language
                     captionList = captionList.filter((e) => e.id != "11");
+                    // add the new language, and refresh on click
+                    captionList.unshift({
+                      id: "-236",
+                      label: label,
+                      changed: false,
+                      cues: [],
+                    });
 
-                    // add the new language
-                    const [
-                      videoDataRequest,
-                      captionsRequest,
-                      languagesRequest,
-                      languagesPairRequest,
-                    ] = await Promise.all([
-                      fetch(
-                        `/api/v1/videos/${parameters.id}`,
-                        fetchCredentials
-                      ),
-                      fetch(
-                        `/api/v1/videos/${parameters.id}/captions`,
-                        fetchCredentials
-                      ),
-                      fetch("/api/v1/videos/languages", fetchCredentials),
-                      fetch(
-                        "/plugins/subtitle-translator/router/available-pairs",
-                        fetchCredentials
-                      ),
-                    ]);
-
-                    if (
-                      captionsRequest.status !== 200 ||
-                      videoDataRequest.status !== 200
-                    ) {
-                      main.innerHTML =
-                        "can't find video with id " + parameters.id;
-                      return;
-                    }
-
-                    const captions: { data: VideoCaption[] } =
-                      await captionsRequest.json();
-                    languagePairs = await languagesPairRequest.json();
-                    languages = await languagesRequest.json();
-
-                    captionList = await Promise.all(
-                      captions.data.map(async (c) => ({
-                        id: c.language.id,
-                        label: c.language.label,
-                        changed: false,
-                        cues: (
-                          await getVTTDataFromUrl(c.captionPath)
-                        ).cues.map<Cue>((c) => {
-                          const text = getStyledText(c.text);
-                          return {
-                            id: c.id,
-                            startTime: c.startTime,
-                            endTime: c.endTime,
-                            text: text.text,
-                            align: c.align,
-                            style: text.style,
-                          };
-                        }),
-                      }))
-                    );
                     selectLanguage(currentCaptionLanguageId);
                   }
                 }
