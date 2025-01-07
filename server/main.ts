@@ -1,6 +1,8 @@
 import type { RegisterServerOptions } from "@peertube/peertube-types";
 import { VideoChannelModel } from "@peertube/peertube-types/server/core/models/video/video-channel";
 const webvtt = require("node-webvtt");
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
 
 interface Lock {
   locked: boolean;
@@ -389,15 +391,16 @@ async function register({
         }
       }
     }
-
     fetch(`${api_url}/existing_language_pairs${parameters}`, {
       method: "GET",
     })
-      .then((resp) => {
+      .then(async (resp) => {
         if (!resp.ok) {
           throw new Error(`HTTP error! status: ${resp.status}`);
         }
-        return resp.json();
+        let data = await resp.json();
+
+        return res.status(200).json(data);
       })
       .then((data) => {
         res.status(200).json(data);

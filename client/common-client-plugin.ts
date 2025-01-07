@@ -268,9 +268,9 @@ async function register({
 
       const cssStyles = getComputedStyle(timelineElement);
       const styles = {
-        text: cssStyles.getPropertyValue("--mainForegroundColor"),
-        box: cssStyles.getPropertyValue("--greyBackgroundColor"),
-        audioBars: cssStyles.getPropertyValue("--mainColorLighter"),
+        text: cssStyles.getPropertyValue("--fg"),
+        box: cssStyles.getPropertyValue("--bg-secondary"),
+        audioBars: cssStyles.getPropertyValue("--primary-450"),
       };
 
       const [_, query] = location.href.split("?");

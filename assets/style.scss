@@ -9,7 +9,7 @@
 }
 
 .subtitle-cues > tbody > tr > td:first-child {
-  color: var(--mainForegroundColor);
+  color: var(--fg);
   font-weight: bold;
 }
 .subtitle-cues > tbody > tr > td:nth-child(1) {
@@ -25,7 +25,7 @@
   cursor: pointer;
 }
 .subtitle-cues > tbody > tr:nth-child(2n+1) {
-  background-color: var(--greyBackgroundColor);
+  background-color: var(--bg-secondary);
 }
 .subtitle-cues > tbody > tr > td, .subtitle-cues > thead > tr > th {
   padding-left: 6px;
@@ -81,9 +81,9 @@
   position: sticky;
   bottom: 0px;
   min-height: 220px;
-  background-color: var(--mainBackgroundColor);
+  background-color: var(--bg);
   width: 100%;
-  box-shadow: 0 0px 16px #000;
+  // box-shadow: 0 0px 16px #000;
   padding-top: 0.5em;
 }
 
