@@ -78,7 +78,7 @@
   padding-bottom: 220px;
 }
 #bottom-controls {
-  position: sticky;
+  position: fixed;
   bottom: 0px;
   min-height: 220px;
   background-color: var(--bg);
